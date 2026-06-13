@@ -1,0 +1,3504 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RMT Inventura</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* =====================================================
+   RMT INVENTURA — slog
+   Paleta: borova zelenina, platno/bež, les, žerjavica
+===================================================== */
+:root{
+  --pine:#1F3D2B;
+  --pine-deep:#15291C;
+  --moss:#3E6B4D;
+  --canvas:#EFEAD9;
+  --card:#FAF7EC;
+  --wood:#8B5E3C;
+  --wood-light:#B0805A;
+  --ember:#C96F2E;
+  --gold:#E5A83B;
+  --ok:#3E7C4F;
+  --warn:#C96F2E;
+  --alert:#A93226;
+  --ink:#23291F;
+  --ink-soft:#5F6657;
+  --line:#DCD5BF;
+  --line-soft:#E8E2D0;
+  --display:Georgia,'Iowan Old Style','Times New Roman',serif;
+  --sans:'Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif;
+  --mono:ui-monospace,'SF Mono','Cascadia Mono',Consolas,monospace;
+  --r:8px;
+  --r-lg:12px;
+  --shadow-sm:0 1px 3px rgba(35,41,31,.08);
+  --shadow-md:0 6px 18px rgba(35,41,31,.16);
+  --shadow-lg:0 18px 50px rgba(21,41,28,.38);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:var(--sans);color:var(--ink);font-size:15px;line-height:1.45;
+  /* subtilna platnena tekstura */
+  background:
+    repeating-linear-gradient(0deg, rgba(139,94,60,.03) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(31,61,43,.022) 0 1px, transparent 1px 3px),
+    var(--canvas);
+}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink)}
+::selection{background:var(--moss);color:#fff}
+
+/* ---------- "našita etiketa" — podpis aplikacije ---------- */
+.tag{
+  display:inline-block;font-family:var(--mono);font-size:12.5px;font-weight:600;
+  letter-spacing:.06em;color:var(--pine);background:#fff;
+  border:1.5px dashed var(--wood);border-radius:4px;padding:2px 8px;white-space:nowrap;
+}
+
+/* ---------- gumbi ---------- */
+.btn{
+  display:inline-flex;align-items:center;gap:7px;border:none;border-radius:7px;
+  padding:9px 16px;font-size:14px;font-weight:600;transition:filter .12s, transform .06s;
+}
+.btn:hover{filter:brightness(1.08)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.btn-primary{background:var(--pine);color:#fff}
+.btn-accent{background:var(--ember);color:#fff}
+.btn-ghost{background:transparent;color:var(--pine);border:1px solid var(--pine)}
+.btn-ghost:hover{background:rgba(31,61,43,.07);filter:none}
+.btn-danger{background:var(--alert);color:#fff}
+.btn-sm{padding:5px 11px;font-size:13px}
+.btn-block{width:100%;justify-content:center}
+
+/* ---------- prijava ---------- */
+#loginScreen{
+  position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;
+  background:
+    radial-gradient(1100px 560px at 78% -8%, #2C5440 0%, transparent 62%),
+    var(--pine-deep);
+  overflow:hidden;
+}
+#loginScreen .treeline{position:absolute;left:0;right:0;bottom:0;width:100%;height:150px;pointer-events:none}
+.login-box{
+  position:relative;width:min(390px,92vw);background:var(--card);border-radius:var(--r-lg);
+  padding:34px 32px 26px;box-shadow:var(--shadow-lg);border-top:5px solid var(--wood);
+}
+.login-box::before{
+  content:'';position:absolute;inset:8px;border:1.5px dashed rgba(139,94,60,.3);
+  border-radius:8px;pointer-events:none;
+}
+.login-box .brand{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.login-box .logo{height:42px;width:auto;object-fit:contain}
+.login-box h1{font-family:var(--display);font-size:27px;letter-spacing:.01em}
+.login-box h1 span{color:var(--ember)}
+.login-box .sub{color:var(--ink-soft);font-size:13px;margin-bottom:22px}
+.field{margin-bottom:14px}
+.field label{
+  display:block;font-size:11.5px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-soft);margin-bottom:5px;
+}
+.field input,.field select,.field textarea{
+  width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;background:#fff;
+}
+.field input:focus,.field select:focus,.field textarea:focus{
+  outline:2px solid var(--moss);outline-offset:1px;border-color:var(--moss);
+}
+.login-err{color:var(--alert);font-size:13px;min-height:18px;margin-bottom:8px}
+.login-hint{
+  margin-top:18px;border-top:1px solid var(--line);padding-top:12px;
+  font-size:12.5px;color:var(--ink-soft);line-height:1.65;
+}
+.login-hint code{font-family:var(--mono);background:var(--canvas);padding:1px 5px;border-radius:3px}
+
+/* ---------- ogrodje ---------- */
+#app{display:none;height:100%}
+#app.on{display:flex;flex-direction:column}
+.topbar{
+  background:linear-gradient(180deg,#21402D,#1A3324);color:#fff;display:flex;align-items:center;gap:14px;
+  padding:0 18px;height:58px;flex-shrink:0;border-bottom:4px solid var(--wood);
+  box-shadow:0 2px 10px rgba(0,0,0,.22);
+}
+.topbar .logo{height:36px;width:auto;object-fit:contain}
+.topbar h1{font-family:var(--display);font-size:19px;letter-spacing:.03em;font-weight:700}
+.topbar h1 span{color:var(--gold);font-weight:400}
+.topbar .spacer{flex:1}
+.userchip{display:flex;align-items:center;gap:9px;font-size:13px}
+.userchip .role{
+  background:rgba(255,255,255,.16);border-radius:99px;padding:2px 10px;font-size:11px;
+  letter-spacing:.08em;text-transform:uppercase;
+}
+.topbar .btn-ghost{color:#fff;border-color:rgba(255,255,255,.5)}
+.topbar .btn-ghost:hover{background:rgba(255,255,255,.1)}
+#menuBtn{display:none;background:transparent;border:none;color:#fff;font-size:24px;line-height:1;padding:4px}
+
+.layout{display:flex;flex:1;min-height:0;position:relative}
+.sidebar{
+  width:250px;flex-shrink:0;background:var(--pine-deep);color:#E6EDE5;
+  overflow-y:auto;padding:12px 0 28px;
+}
+.snav-label{
+  font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:#8DA893;
+  padding:16px 18px 6px;
+}
+.snav button{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:none;
+  color:#E6EDE5;padding:9px 18px;font-size:14px;border-left:3px solid transparent;
+}
+.snav button:hover{background:rgba(255,255,255,.06)}
+.snav button.active{background:var(--moss);border-left-color:var(--gold)}
+.snav button:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.snav .badge{
+  margin-left:auto;background:var(--alert);color:#fff;border-radius:99px;
+  font-size:11px;font-weight:700;padding:1px 7px;
+}
+#sideBackdrop{display:none}
+
+.main{flex:1;overflow-y:auto;padding:24px 28px 70px}
+.crumbs{font-size:13px;color:var(--ink-soft);margin-bottom:14px}
+.crumbs a{color:var(--pine);text-decoration:none;font-weight:600;cursor:pointer}
+.crumbs a:hover{text-decoration:underline}
+.view-title{font-family:var(--display);font-size:24px;margin-bottom:4px;letter-spacing:.01em}
+.view-sub{color:var(--ink-soft);font-size:13.5px;margin-bottom:20px;max-width:680px}
+
+/* ---------- opozorilo za zamude ---------- */
+.banner-warn{
+  display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+  background:#F6E2D8;border:1px solid var(--alert);border-left:5px solid var(--alert);
+  border-radius:var(--r);padding:11px 14px;margin-bottom:18px;font-size:14px;
+}
+.banner-warn b{color:var(--alert)}
+.banner-warn .btn{margin-left:auto}
+
+/* ---------- kartice kategorij ---------- */
+.cardgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.catcard{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px 16px 14px;
+  cursor:pointer;transition:transform .1s,box-shadow .1s;position:relative;box-shadow:var(--shadow-sm);
+}
+.catcard:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.catcard .ico{font-size:28px;margin-bottom:8px}
+.catcard h3{font-size:15.5px;margin-bottom:3px}
+.catcard .meta{font-size:12.5px;color:var(--ink-soft)}
+.catcard .outchip{
+  position:absolute;top:12px;right:12px;background:var(--ember);color:#fff;
+  font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;
+}
+.meter{height:5px;background:var(--line);border-radius:99px;margin-top:12px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ember)}
+
+/* ---------- filtri (žetoni) ---------- */
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.chips .chips-label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);min-width:74px}
+.chip{
+  border:1.5px solid var(--pine);background:var(--card);color:var(--pine);
+  border-radius:99px;padding:6px 14px;font-size:13px;font-weight:600;
+}
+.chip:hover{background:#E5EDE3}
+.chip.active{background:var(--pine);color:#fff}
+.chip .cnt{opacity:.65;font-weight:400;margin-left:4px}
+.chip-clear{border-color:var(--alert);color:var(--alert)}
+.chip-clear:hover{background:#F6E2D8}
+.chip-sm{padding:4px 11px;font-size:12.5px}
+
+/* ---------- statistika ---------- */
+.stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.stat{
+  background:var(--card);border:1px solid var(--line);border-left:4px solid var(--moss);
+  border-radius:var(--r);padding:11px 18px;min-width:128px;box-shadow:var(--shadow-sm);
+}
+.stat b{display:block;font-size:23px;font-family:var(--mono)}
+.stat span{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft)}
+.stat.s-ok{border-left-color:var(--ok)} .stat.s-ok b{color:var(--ok)}
+.stat.s-warn{border-left-color:var(--ember)} .stat.s-warn b{color:var(--ember)}
+.stat.s-alert{border-left-color:var(--alert)} .stat.s-alert b{color:var(--alert)}
+
+/* ---------- tabela ---------- */
+.toolrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.toolrow input[type=search]{
+  flex:1;min-width:180px;max-width:360px;padding:8px 12px;border:1px solid var(--line);
+  border-radius:7px;background:#fff;
+}
+.toolrow input[type=search]:focus{outline:2px solid var(--moss);outline-offset:1px}
+.toolrow select{padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;font-size:13.5px}
+.result-cnt{font-size:13px;color:var(--ink-soft);margin-left:auto}
+.tablewrap{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  overflow:auto;max-height:72vh;box-shadow:var(--shadow-sm);
+}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{
+  position:sticky;top:0;z-index:2;background:var(--card);
+  text-align:left;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-soft);
+  padding:11px 12px;white-space:nowrap;box-shadow:0 2px 0 var(--line);
+}
+th.th-sort{cursor:pointer;user-select:none}
+th.th-sort:hover{color:var(--pine)}
+th .arrow{font-size:10px;margin-left:3px}
+td{padding:10px 12px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+tbody tr:nth-child(even) td{background:rgba(139,94,60,.025)}
+tr:last-child td{border-bottom:none}
+tr.rowlink{cursor:pointer}
+tr.rowlink:hover td{background:#F1EDDD}
+.qtycell{font-family:var(--mono);font-size:13px;white-space:nowrap}
+.more{
+  display:inline-block;background:var(--line);border-radius:99px;padding:0 7px;
+  font-size:11.5px;font-weight:700;color:var(--ink-soft);cursor:help;
+}
+.empty{padding:38px;text-align:center;color:var(--ink-soft)}
+
+/* ---------- statusne značke ---------- */
+.status{
+  display:inline-flex;align-items:center;gap:6px;border-radius:99px;
+  padding:2px 10px;font-size:12px;font-weight:600;white-space:nowrap;
+}
+.status::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0}
+.st-ok{background:#E0EEDF;color:#2F6B3E}
+.st-part{background:#F7E7D0;color:#9A5B17}
+.st-out{background:#F2DCD3;color:var(--alert)}
+.st-late{background:var(--alert);color:#fff}
+.overdue{color:var(--alert);font-weight:700}
+
+/* ---------- vnosna polja v tabeli (prilagodljivi stolpci) ---------- */
+.tentctl{
+  font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:5px;
+  background:#fff;max-width:170px;
+}
+.tentnote{width:130px}
+.tentdate{width:96px}
+.tentchk{width:17px;height:17px;accent-color:var(--alert);cursor:pointer}
+.tentmulti{
+  display:block;width:160px;font-size:12.5px;padding:4px 8px;border:1px solid var(--line);
+  border-radius:5px;background:#fff;text-align:left;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;cursor:pointer;color:var(--ink);
+}
+.tentmulti:hover{border-color:var(--pine);background:#F3F6F1}
+.multilist{display:flex;flex-direction:column;gap:2px;max-height:48vh;overflow-y:auto;margin-bottom:4px}
+.multiopt{display:flex;gap:10px;align-items:center;font-size:14px;padding:7px 10px;border-radius:6px;cursor:pointer}
+.multiopt:hover{background:#EDE9DA}
+.multiopt input{width:16px;height:16px;accent-color:var(--pine);flex-shrink:0}
+.multiopt .optdot{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:1px solid rgba(0,0,0,.18)}
+
+/* ---------- barvne oznake vrednosti stolpcev ---------- */
+.optpill{
+  display:inline-block;border-radius:99px;padding:1px 9px;font-size:11.5px;font-weight:600;
+  white-space:nowrap;line-height:1.55;
+}
+.optpill.neutral{background:var(--canvas);color:var(--ink);border:1px solid var(--line)}
+.copt-lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin-top:9px}
+.copt{display:flex;align-items:center;gap:5px;margin-top:6px;flex-wrap:wrap}
+.copt-name{font-size:12.5px;min-width:118px;font-weight:600}
+.swatch{
+  width:21px;height:21px;border-radius:50%;border:none;padding:0;cursor:pointer;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.15);
+}
+.swatch:hover{transform:scale(1.12)}
+.swatch.sel{outline:2px solid var(--ink);outline-offset:1px}
+.swatch-none{background:#fff;color:var(--ink-soft);font-size:12px;line-height:21px;text-align:center}
+
+/* ---------- skeniranje ---------- */
+.scanbox{max-width:580px}
+.scaninput{
+  width:100%;font-family:var(--mono);font-size:20px;padding:14px 16px;border:2px solid var(--pine);
+  border-radius:var(--r);background:#fff;letter-spacing:.05em;
+}
+.scaninput:focus{outline:3px solid rgba(62,107,77,.3)}
+.scanresult{margin-top:20px}
+.scanerr{
+  margin-top:20px;background:#F2DCD3;border:1px solid var(--alert);color:var(--alert);
+  border-radius:var(--r);padding:14px 16px;font-weight:600;
+}
+
+/* ---------- kartica predmeta ("našit obliž") ---------- */
+.itemcard{
+  position:relative;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r-lg);padding:22px;box-shadow:var(--shadow-sm);
+}
+.itemcard::before{
+  content:'';position:absolute;inset:7px;border:1.5px dashed rgba(139,94,60,.32);
+  border-radius:8px;pointer-events:none;
+}
+.itemcard>*{position:relative}
+.itemcard h3{font-family:var(--display);font-size:19px;margin:6px 0 2px}
+.itemcard .sub{color:var(--ink-soft);font-size:13.5px;margin-bottom:12px}
+.card-late{
+  background:#F6E2D8;border:1px solid var(--alert);border-radius:7px;color:var(--alert);
+  font-size:13px;font-weight:600;padding:7px 11px;margin:10px 0 4px;
+}
+.qtyrow{display:flex;gap:10px;margin:12px 0 14px;flex-wrap:wrap}
+.qtybox{border:1px solid var(--line);border-radius:var(--r);padding:8px 14px;text-align:center;background:#fff;min-width:86px}
+.qtybox b{display:block;font-size:20px;font-family:var(--mono)}
+.qtybox span{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-soft)}
+.loanlist{margin:10px 0 14px;display:flex;flex-direction:column;gap:7px}
+.loanrow{
+  display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;border:1px solid var(--line);
+  border-radius:var(--r);padding:9px 12px;background:#fff;font-size:13.5px;
+}
+.loanrow.late{border-color:var(--alert);background:#FBF0EA}
+.loanrow .who{font-weight:700}
+.loanrow .loanctl{margin-left:auto;display:flex;gap:7px;align-items:center;font-size:13px}
+.loanrow .loanctl input{
+  width:62px;padding:5px 7px;border:1px solid var(--line);border-radius:5px;font-size:14px;
+}
+
+/* ---------- izposoja: razpoložljivost in hitri roki ---------- */
+.availbar{
+  display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);
+  border-radius:var(--r);padding:10px 14px;margin-bottom:14px;
+}
+.availbar b{font-family:var(--mono);font-size:24px;color:var(--ok)}
+.availbar .lbl{font-size:13px;color:var(--ink-soft)}
+.availbar .meter{flex:1;margin:0}
+.qtystep{display:flex;align-items:center;gap:6px}
+.qtystep button{
+  width:32px;height:34px;border:1px solid var(--line);border-radius:7px;background:#fff;
+  font-size:17px;font-weight:700;color:var(--pine);line-height:1;
+}
+.qtystep button:hover{border-color:var(--pine);background:#EFF3EC}
+.qtystep input{width:64px;text-align:center;padding:7px 4px;border:1px solid var(--line);border-radius:7px}
+.duechips{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+
+/* ---------- skupinska izposoja (košarica) ---------- */
+.cart-cols{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+.cart-pick{flex:1;min-width:280px}
+.cart-side{flex:1;min-width:280px}
+.cart-list{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  max-height:48vh;overflow-y:auto;box-shadow:var(--shadow-sm);
+}
+.cart-pickrow{
+  display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line-soft);font-size:14px;
+}
+.cart-pickrow:last-child{border-bottom:none}
+.cart-pickrow .nm{flex:1;min-width:0}
+.cart-pickrow .av{font-family:var(--mono);font-size:12.5px;color:var(--ok);white-space:nowrap}
+.cart-pickrow.inbasket{opacity:.55}
+.cart-basket{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:6px;margin-bottom:14px;
+  box-shadow:var(--shadow-sm);
+}
+.cart-row{
+  display:flex;align-items:center;gap:10px;padding:8px 8px;border-bottom:1px solid var(--line-soft);font-size:14px;
+}
+.cart-row:last-child{border-bottom:none}
+.cart-row .nm{flex:1;min-width:0}
+.cart-row .nm small{display:block;color:var(--ink-soft);font-size:12px}
+.cart-row .qtystep input{width:54px}
+.cart-row .rm{border:none;background:none;color:var(--alert);font-size:19px;font-weight:bold;cursor:pointer;padding:0 4px;line-height:1}
+.cart-sum{font-size:13px;color:var(--ink-soft);padding:8px 10px}
+
+/* ---------- modalna okna ---------- */
+#modalWrap{
+  position:fixed;inset:0;background:rgba(21,41,28,.58);display:none;
+  align-items:center;justify-content:center;z-index:150;padding:18px;
+}
+#modalWrap.on{display:flex}
+.modal{
+  background:var(--card);border-radius:var(--r-lg);width:min(540px,100%);padding:24px;
+  box-shadow:var(--shadow-lg);border-top:5px solid var(--pine);max-height:90vh;overflow-y:auto;
+}
+.modal h3{font-family:var(--display);font-size:19px;margin-bottom:14px}
+.modal .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.modal .hint{color:var(--ink-soft);font-size:13px;margin:-6px 0 14px}
+.fieldrow{display:flex;gap:12px}
+.fieldrow .field{flex:1}
+.emojirow{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 12px}
+.emojibtn{font-size:19px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px 7px;line-height:1.3}
+.emojibtn:hover{border-color:var(--pine);background:#E5EDE3}
+
+/* ---------- urejevalnik stolpcev ---------- */
+.frow{border:1px solid var(--line);border-radius:7px;padding:8px;margin-bottom:7px;background:#fff}
+.frow-top{display:flex;gap:7px;align-items:center}
+.frow-name{flex:2;min-width:0;padding:6px 9px;border:1px solid var(--line);border-radius:5px;font-size:13.5px}
+.frow-type{flex:2;min-width:0;padding:6px 6px;border:1px solid var(--line);border-radius:5px;font-size:12.5px;background:#fff}
+.frow-btns{display:flex;gap:2px;flex-shrink:0}
+.frow-btns button{
+  border:none;background:none;font-size:15px;color:var(--ink-soft);padding:2px 5px;line-height:1;border-radius:4px;
+}
+.frow-btns button:hover{background:var(--line-soft);color:var(--ink)}
+.frow-btns .frow-x{color:var(--alert);font-size:18px;font-weight:bold}
+.frow-opts{width:100%;margin-top:7px;padding:6px 9px;border:1px dashed var(--line);border-radius:5px;font-size:12.5px}
+.typehelp{font-size:12px;color:var(--ink-soft);background:var(--line-soft);border-radius:6px;padding:7px 10px;margin-bottom:10px;line-height:1.6}
+
+/* ---------- QR nalepke ---------- */
+.qrgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px}
+.qrpick{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px;
+  display:flex;gap:9px;align-items:flex-start;font-size:13px;cursor:pointer;
+}
+.qrpick:hover{border-color:var(--moss)}
+.qrpick input{margin-top:3px;accent-color:var(--pine)}
+.qrcat-h{
+  margin:22px 0 10px;font-family:var(--display);font-size:15px;font-weight:700;color:var(--pine);
+  border-bottom:1px solid var(--line);padding-bottom:5px;
+}
+
+/* ---------- dnevnik ---------- */
+.log-borrow{color:var(--ember);font-weight:700;white-space:nowrap}
+.log-return{color:var(--ok);font-weight:700;white-space:nowrap}
+.log-grouprow td{background:rgba(201,111,46,.05)}
+.log-grouprow:nth-child(even) td{background:rgba(201,111,46,.08)}
+
+/* ---------- koledar: plavajoči gumb + okence ---------- */
+#calFab{
+  position:fixed;right:22px;bottom:22px;z-index:140;width:56px;height:56px;border-radius:50%;
+  background:var(--pine);color:#fff;font-size:23px;border:2px solid rgba(255,255,255,.25);
+  box-shadow:var(--shadow-md);transition:transform .1s;
+}
+#calFab:hover{transform:scale(1.07)}
+#calFab:focus-visible{outline:3px solid var(--gold)}
+.fabbadge{
+  position:absolute;top:-5px;right:-5px;background:var(--alert);color:#fff;border-radius:99px;
+  min-width:21px;height:21px;font-size:11.5px;font-weight:700;line-height:21px;padding:0 4px;
+  border:2px solid var(--canvas);
+}
+.calpop{
+  position:fixed;right:22px;bottom:88px;z-index:139;max-width:calc(100vw - 32px);
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px;
+  box-shadow:var(--shadow-lg);display:none;border-top:5px solid var(--pine);
+}
+.calpop.on{display:flex;gap:14px;align-items:stretch}
+.calpop-main{width:322px;max-width:100%;flex-shrink:0}
+.calpop-side{
+  width:248px;flex-shrink:0;border-right:1px solid var(--line);padding-right:13px;
+  max-height:348px;overflow-y:auto;
+}
+.calpop-head{display:flex;align-items:center;gap:5px;margin-bottom:10px}
+.calpop-x{border:none;background:none;font-size:20px;color:var(--ink-soft);cursor:pointer;padding:0 4px;line-height:1}
+.calpop-x:hover{color:var(--ink)}
+.calsel{
+  font-size:13px;padding:4px 5px;border:1px solid var(--line);border-radius:5px;
+  background:#fff;font-weight:600;color:var(--ink);text-transform:capitalize;
+}
+.callegend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--ink-soft);margin-top:10px}
+.callegend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal-dow{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);text-align:center;padding-bottom:2px}
+.cal-day{background:#fff;border:1px solid var(--line);border-radius:6px;min-height:42px;padding:3px 4px;overflow:hidden}
+.cal-day.wend{background:#FBF8EF}
+.cal-day.hasv{cursor:pointer}
+.cal-day.hasv:hover{box-shadow:0 2px 8px rgba(31,61,43,.2);border-color:var(--moss)}
+.cal-day.blank{background:transparent;border-color:transparent}
+.cal-day.today{border:2px solid var(--pine)}
+.cal-day.sel{background:#E5EDE3;border-color:var(--pine)}
+.cal-num{font-weight:700;font-family:var(--mono);font-size:11px;margin-bottom:2px}
+.cal-day.today .cal-num{color:var(--pine)}
+.cal-dots{display:flex;gap:2px;flex-wrap:wrap;align-items:center}
+.cal-dot{width:7px;height:7px;border-radius:50%}
+.cal-more{font-size:9px;font-weight:700;color:var(--ink-soft)}
+.dot-borrow{background:var(--ember)}
+.dot-due{background:var(--ok)}
+.dot-overdue{background:var(--alert)}
+.dot-popis{background:#3B5489}
+.cal-evt{border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;white-space:nowrap}
+.ev-borrow{background:#F7E7D0;color:#9A5B17}
+.ev-due{background:#E0EEDF;color:#2F6B3E}
+.ev-overdue{background:var(--alert);color:#fff}
+.ev-popis{background:#E3E9F5;color:#3B5489}
+.calpop-day-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:13.5px}
+.calpop-evt{display:flex;flex-direction:column;gap:3px;font-size:12.5px;margin-bottom:10px;line-height:1.45}
+.calpop-evt .cal-evt{align-self:flex-start}
+.calpop-evt-t a{color:var(--pine);font-weight:700;cursor:pointer;white-space:nowrap}
+.calpop-evt-t a:hover{text-decoration:underline}
+
+/* ---------- potrditveno okno ---------- */
+#confirmWrap{
+  position:fixed;inset:0;background:rgba(21,41,28,.62);display:none;
+  align-items:center;justify-content:center;z-index:170;padding:16px;
+}
+#confirmWrap.on{display:flex}
+.confirm{
+  background:var(--card);border-radius:var(--r-lg);width:min(410px,100%);padding:26px 24px 20px;
+  box-shadow:var(--shadow-lg);border-top:5px solid var(--alert);text-align:center;
+}
+.confirm-ico{font-size:34px;margin-bottom:8px}
+.confirm h3{font-family:var(--display);font-size:19px;margin-bottom:8px}
+.confirm p{font-size:14px;color:var(--ink-soft);line-height:1.55;margin-bottom:4px}
+.confirm .actions{display:flex;gap:10px;justify-content:center;margin-top:18px}
+
+/* ---------- obvestilo (toast) ---------- */
+#toast{
+  position:fixed;bottom:24px;left:50%;transform:translate(-50%,20px);opacity:0;pointer-events:none;
+  background:var(--ink);color:#fff;padding:11px 20px;border-radius:var(--r);font-size:14px;z-index:300;
+  transition:opacity .2s,transform .2s;max-width:90vw;box-shadow:var(--shadow-md);
+}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- odzivnost (telefon) ---------- */
+@media (max-width:840px){
+  #menuBtn{display:block}
+  .sidebar{
+    position:fixed;top:58px;bottom:0;left:0;z-index:120;transform:translateX(-100%);
+    transition:transform .2s;box-shadow:6px 0 24px rgba(0,0,0,.32);
+  }
+  .sidebar.open{transform:translateX(0)}
+  #sideBackdrop.on{
+    display:block;position:fixed;top:58px;bottom:0;left:0;right:0;z-index:119;
+    background:rgba(21,41,28,.4);
+  }
+  .main{padding:18px 14px 80px}
+  .topbar h1{font-size:16px}
+  .userchip #userName{display:none}
+  #calFab{right:14px;bottom:14px}
+  .stats{gap:8px}
+  .stat{min-width:104px;padding:9px 13px}
+  .stat b{font-size:19px}
+}
+@media (max-width:680px){
+  .calpop{left:10px;right:10px;bottom:80px;max-width:none}
+  .calpop.on{flex-direction:column-reverse;max-height:76vh;overflow-y:auto}
+  .calpop-side{width:auto;border-right:none;border-top:1px solid var(--line);padding:10px 0 0;max-height:190px}
+  .calpop-main{width:100%}
+  .fieldrow{flex-direction:column;gap:0}
+  .modal{padding:18px}
+  .banner-warn .btn{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none !important}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== PRIJAVA ===================== -->
+<div id="loginScreen">
+  <svg class="treeline" viewBox="0 0 1200 140" preserveAspectRatio="none" aria-hidden="true">
+    <path fill="#0F2316" opacity=".6" d="M0 140 L0 92 L50 32 L100 96 L150 46 L200 100 L250 26 L300 96 L350 50 L400 104 L450 36 L500 96 L550 56 L600 100 L650 30 L700 96 L750 46 L800 104 L850 28 L900 96 L950 50 L1000 100 L1050 36 L1100 92 L1150 56 L1200 96 L1200 140 Z"/>
+    <path fill="#0A1A10" d="M0 140 L0 112 L60 62 L120 114 L180 72 L240 116 L300 58 L360 114 L420 74 L480 118 L540 62 L600 114 L660 76 L720 116 L780 60 L840 114 L900 74 L960 118 L1020 64 L1080 114 L1140 78 L1200 106 L1200 140 Z"/>
+  </svg>
+  <div class="login-box">
+    <div class="brand">
+      <img src="./logo.png" alt="" class="logo" onerror="this.style.display='none'">
+      <h1>RMT <span>Inventura</span></h1>
+    </div>
+    <div class="sub">Evidenca taborniške opreme</div>
+    <div id="loginForm">
+      <div class="field">
+        <label for="loginUser">E-mail</label>
+        <input id="loginUser" type="email" autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="loginPass">Geslo</label>
+        <input id="loginPass" type="password" autocomplete="current-password">
+      </div>
+      <div class="login-err" id="loginErr"></div>
+      <button class="btn btn-primary btn-block" data-act="login">Prijava</button>
+      <div class="login-hint">
+        Še nimaš računa? <a data-act="showRegister" style="color:var(--ember);font-weight:600;cursor:pointer">Registriraj se</a><br>
+        Računi se ustvarijo prek Supabase Auth.<br>
+        Po prvi registraciji nastavi vlogo gospodarja opreme v tabeli <code>profiles</code>.
+      </div>
+    </div>
+    <div id="registerForm" style="display:none">
+      <div class="fieldrow">
+        <div class="field"><label for="regFirst">Ime</label><input id="regFirst" autocomplete="given-name"></div>
+        <div class="field"><label for="regLast">Priimek</label><input id="regLast" autocomplete="family-name"></div>
+      </div>
+      <div class="field"><label for="regEmail">E-mail</label><input id="regEmail" type="email" autocomplete="email"></div>
+      <div class="field"><label for="regPass">Geslo</label><input id="regPass" type="password" autocomplete="new-password"></div>
+      <input id="regRole" type="hidden" value="user">
+      <div class="login-hint" style="margin-top:0;margin-bottom:12px">
+        Novi uporabniki dobijo vlogo <b>Tabornik</b>. Vlogo <b>Gospodar opreme</b> nastaviš v Supabase tabeli <code>profiles</code>.
+      </div>
+      <div class="login-err" id="loginErr2"></div>
+      <button class="btn btn-primary btn-block" data-act="register">Ustvari račun</button>
+      <div class="login-hint">
+        Že imaš račun? <a data-act="showLogin" style="color:var(--ember);font-weight:600;cursor:pointer">Nazaj na prijavo</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== APLIKACIJA ===================== -->
+<div id="app">
+  <header class="topbar">
+    <button id="menuBtn" data-act="menu" aria-label="Meni">☰</button>
+    <img src="./logo.png" alt="" class="logo" onerror="this.style.display='none'">
+    <h1>RMT <span>Inventura</span></h1>
+    <div class="spacer"></div>
+    <div class="userchip">
+      <span id="userName"></span>
+      <span class="role" id="userRole"></span>
+    </div>
+    <button class="btn btn-ghost btn-sm" data-act="logout">Odjava</button>
+  </header>
+
+  <div class="layout">
+    <div id="sideBackdrop" data-act="menuClose"></div>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="main" id="main"></main>
+  </div>
+
+  <button id="calFab" data-act="calToggle" aria-label="Koledar" title="Koledar izposoj in popisov">🗓️<span id="fabBadge" class="fabbadge" hidden></span></button>
+  <div id="calPop" class="calpop"></div>
+</div>
+
+<div id="modalWrap" data-act="modalBg">
+  <div class="modal" id="modalBox"></div>
+</div>
+<div id="confirmWrap" data-act="confirmBg">
+  <div class="confirm">
+    <div class="confirm-ico">🗑️</div>
+    <h3 id="confirmTitle">Si prepričan?</h3>
+    <p id="confirmMsg"></p>
+    <div class="actions">
+      <button class="btn btn-ghost" data-act="confirmNo">Prekliči</button>
+      <button class="btn btn-danger" id="confirmBtn" data-act="confirmYes">Izbriši</button>
+    </div>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   RMT INVENTURA — samostojna aplikacija (ena HTML datoteka)
+
+   Razdelitev kode:
+     1. KONSTANTE IN PRIVZETI PODATKI
+     2. STANJE APLIKACIJE
+     3. PODATKOVNI SLOJ (Supabase) IN MIGRACIJE
+     4. POMOŽNE FUNKCIJE
+     5. PRILAGODLJIVI STOLPCI PO KATEGORIJAH
+     6. PRIJAVA IN VLOGE
+     7. NAVIGACIJA IN PREKLOP POGLEDOV
+     8. POGLEDI: skeniranje, pregled, vsa oprema
+     9. IZPOSOJA IN VRAČILO
+    10. PREDMETI — dodajanje, urejanje, brisanje
+    11. KOLEDAR (plavajoče okence)
+    12. DNEVNIK, EXCEL, QR, VARNOSTNA KOPIJA
+    13. KATEGORIJE IN UREJEVALNIK STOLPCEV
+    14. MODALNA IN POTRDITVENA OKNA, OBVESTILA
+    15. DOGODKOVNA DELEGACIJA (vsi kliki/vnosi na enem mestu)
+    16. ZAGON
+
+   Varnost: vsa uporabniška besedila gredo skozi esc(), parametri
+   gumbov pa se prenašajo z data-* atributi (brez vstavljanja
+   vrednosti v JavaScript nize) — s tem so vnosi zaščiteni pred XSS.
+===================================================================== */
+
+/* =====================================================================
+   1. KONSTANTE IN PRIVZETI PODATKI
+===================================================================== */
+
+/* lokalna prijava — interna raba! */
+/* privzeti uporabniki — vgrajena računa ostaneta delujoča, dodatne
+   uporabnike pa je mogoče registrirati (shranjeni so v localStorage). */
+const DEFAULT_USERS = [
+  { id:'u_admin',    username:'admin',    firstName:'Gospodar', lastName:'opreme', email:'admin@rmt.local',    password:'admin123', role:'admin' },
+  { id:'u_tabornik', username:'tabornik', firstName:'Tabornik', lastName:'',       email:'tabornik@rmt.local', password:'tabor123', role:'user'  }
+];
+
+const LS_KEY = 'rmtInventura_v1';
+
+/* ===================== SUPABASE NASTAVITVE =====================
+   1) V Supabase Dashboard odpri Project Settings / API.
+   2) Zamenjaj spodnji vrednosti s Project URL in Publishable key.
+   3) V SQL editorju najprej zaženi datoteko supabase_schema_rls.sql.
+================================================================= */
+const SUPABASE_URL = 'https://obaktqfknvasvbqlabvm.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_f_l4B7-WDo5wpYkDdve5sw_IecZScUJ';
+const USE_SUPABASE = true;
+const sb = window.supabase && window.supabase.createClient
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+  : null;
+let isSaving = false;
+let booting = false;
+
+
+const DEFAULT_CATEGORIES = [
+  { id:'sotori',  name:'Šotori',               icon:'⛺', subcats:['Kupola šotori','Tunnel šotori','Geodetski šotori','Predprostori'] },
+  { id:'kuhinja', name:'Kuhinja',              icon:'🍳', subcats:['Kuhalniki & plinski','Posode & lonci','Pribor','Hladilne torbe'] },
+  { id:'spanje',  name:'Spanje',               icon:'🛏️', subcats:['Spalne vreče','Blazine & podloge','Ležišča'] },
+  { id:'bajtica', name:'Bajtica',              icon:'🏚️', subcats:['Pohištvo','Čistila','Dekoracija','Elektrika'] },
+  { id:'tehnika', name:'Programska oprema',    icon:'💻', subcats:['Laptopi & tablice','Zvočniki','Projektorji','Kabli & adapterji'] },
+  { id:'varnost', name:'Varnost & prva pomoč', icon:'🏥', subcats:['Prva pomoč','Razsvetljava','Požarna varnost'] },
+  { id:'orodje',  name:'Orodje',               icon:'🔧', subcats:['Ročno orodje','Vrvi & spenjači','Motorne žage'] },
+  { id:'transport',name:'Transport',           icon:'🚐', subcats:['Vozila','Prtljaga & torbe','Kolesarstvo'] }
+];
+
+const DEFAULT_INVENTORY = [
+  { id:'SOT-001', name:'Šotor Salewa 2-osebni', cat:'sotori', subcat:'Kupola šotori', qty:4, condition:'dobro', note:'', loans:[] },
+  { id:'SOT-002', name:'Šotor Ferrino 4-osebni', cat:'sotori', subcat:'Tunnel šotori', qty:2, condition:'dobro', note:'',
+    loans:[{ borrower:'Miha Kovač', qty:1, from:'2026-06-01', until:'2026-06-08', note:'vod Medvedi' }],
+    custom:{ tf_repair:true, tf_roof:['Slaba impregnacija','Manjkajo vrvice/napenjalci'], tf_floor:['OK'], tf_service:'Mali servis', tf_date:'2026-05-20', tf_notes:'impregnirati pred taborom' } },
+  { id:'KUH-001', name:'Plinski kuhalnik dvojni', cat:'kuhinja', subcat:'Kuhalniki & plinski', qty:3, condition:'dobro', note:'', loans:[] },
+  { id:'KUH-002', name:'Vilice (jedilne)', cat:'kuhinja', subcat:'Pribor', qty:30, condition:'dobro', note:'',
+    loans:[{ borrower:'Ana Novak', qty:12, from:'2026-06-05', until:'2026-06-20', note:'tabor priprava' }] },
+  { id:'SPA-001', name:'Spalna vreča -10°C', cat:'spanje', subcat:'Spalne vreče', qty:6, condition:'dobro', note:'', loans:[] },
+  { id:'SPA-002', name:'Spalna vreča +5°C', cat:'spanje', subcat:'Spalne vreče', qty:8, condition:'rabljeno', note:'',
+    loans:[{ borrower:'Ana Novak', qty:3, from:'2026-05-28', until:'2026-06-11', note:'' }] },
+  { id:'VAR-001', name:'Komplet prve pomoči', cat:'varnost', subcat:'Prva pomoč', qty:2, condition:'dobro', note:'preveri rok uporabe', loans:[] },
+  { id:'ORO-001', name:'Sekira mala', cat:'orodje', subcat:'Ročno orodje', qty:5, condition:'dobro', note:'', loans:[] },
+  { id:'TEH-001', name:'Projektor Epson', cat:'tehnika', subcat:'Projektorji', qty:1, condition:'dobro', note:'',
+    loans:[{ borrower:'Miha Kovač', qty:1, from:'2026-06-09', until:'2026-06-12', note:'' }] }
+];
+
+/* tipi prilagodljivih stolpcev */
+const FIELD_TYPES = [
+  { id:'text',        label:'Besedilo' },
+  { id:'number',      label:'Število' },
+  { id:'date',        label:'Datum' },
+  { id:'checkbox',    label:'Kljukica' },
+  { id:'select',      label:'Spustni seznam (ena izbira)' },
+  { id:'multiselect', label:'Spustni seznam (več izbir)' }
+];
+
+/* privzeti popisni stolpci za šotore */
+const TENT_ROOF = ['Luknje v stranicah','Luknje v strehi','Manjkajo pentlje/zanke','Manjkajo gumbi/rinke','Uničena vertikalna zadrga','Poškodovana mreža','Slaba impregnacija','Manjkajo vrvice/napenjalci','Poškodovana slemenska palica','Poškodovana stojna palica','Drugo','OK'];
+const TENT_FLOOR = ['Luknje v podnju','Raztrgan poden','Manjkajo pentlje/zanke','Uničena horizontalna zadrga','Drugo','OK'];
+const TENT_SERVICE = ['Ni potreben','Mali servis','Veliki servis','Menjava podna','Menjava strehe','Odpis'];
+
+/* paleta barv, ki jih lahko dobi posamezna možnost spustnega seznama */
+const OPT_COLORS = [
+  { c:'#3E7C4F', n:'zelena' },
+  { c:'#E5B400', n:'rumena' },
+  { c:'#C96F2E', n:'oranžna' },
+  { c:'#A93226', n:'rdeča' },
+  { c:'#23291F', n:'črna' },
+  { c:'#3B5489', n:'modra' },
+  { c:'#8B5E3C', n:'rjava' },
+  { c:'#7A7F74', n:'siva' }
+];
+/* privzete barve za šotorski stolpec Servis */
+const TENT_SERVICE_COLORS = {
+  'Ni potreben':'#3E7C4F', 'Mali servis':'#E5B400', 'Veliki servis':'#A93226', 'Odpis':'#23291F'
+};
+
+const MONTH_NAMES = ['januar','februar','marec','april','maj','junij','julij','avgust','september','oktober','november','december'];
+const DOW_NAMES = ['P','T','S','Č','P','S','N'];
+const CAT_EMOJIS = ['📁','⛺','🍳','🛏️','🏚️','💻','🏥','🔧','🚐','🎒','🪓','🔥','⚡','🛶','🧭','🎪','🪢','📻'];
+
+const ALL_STATUSES = [
+  { id:'ok',      label:'Na voljo' },
+  { id:'part',    label:'Delno izposojeno' },
+  { id:'out',     label:'Vse izposojeno' },
+  { id:'overdue', label:'Zamuda ⚠' }
+];
+
+/* =====================================================================
+   2. STANJE APLIKACIJE
+===================================================================== */
+let categories = [];
+let inventory  = [];
+let log        = [];
+let users      = [];
+
+let currentUser = null;
+let activeNav   = 'scan';
+let browseState = { cat:null, subcat:null, q:'' };      // pogled posamezne kategorije
+let allFilter   = { cat:null, status:null, q:'' };      // pogled Vsa oprema
+let logFilter   = { type:'', q:'' };                    // dnevnik
+let tableSort   = { key:null, dir:1 };                  // razvrščanje tabel
+let calY = null, calM = null, calSelDay = null;         // koledar
+let draftFields = [];                                   // urejevalnik stolpcev
+let confirmCb   = null;                                 // potrditveno okno
+let cart        = [];                                   // skupinska izposoja: [{code, qty}]
+let draftCat    = null;                                 // urejanje kategorije: {id, subs:[{orig,name}]}
+
+/* =====================================================================
+   3. PODATKOVNI SLOJ (Supabase) IN MIGRACIJE
+===================================================================== */
+function supabaseReady(){
+  return !!(USE_SUPABASE && sb && SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY &&
+    !SUPABASE_URL.includes('YOUR-PROJECT-REF') && !SUPABASE_PUBLISHABLE_KEY.includes('YOUR_KEY_HERE'));
+}
+function assertSupabase(){
+  if(!supabaseReady()){
+    const msg = 'V HTML vpiši SUPABASE_URL in SUPABASE_PUBLISHABLE_KEY.';
+    try{ toast(msg); }catch(_e){}
+    throw new Error(msg);
+  }
+}
+function profileRowToUser(r, authUser){
+  const email = (r && r.email) || (authUser && authUser.email) || '';
+  return {
+    id: r.id,
+    username: email,
+    firstName: r.first_name || '',
+    lastName: r.last_name || '',
+    email,
+    role: r.role || 'user'
+  };
+}
+function categoryToDb(c){
+  return {
+    id:String(c.id),
+    name:c.name || '',
+    icon:c.icon || '📁',
+    subcats:Array.isArray(c.subcats) ? c.subcats : [],
+    fields:Array.isArray(c.fields) ? c.fields : []
+  };
+}
+function dbToCategory(r){
+  return {
+    id:r.id,
+    name:r.name || '',
+    icon:r.icon || '📁',
+    subcats:Array.isArray(r.subcats) ? r.subcats : [],
+    fields:Array.isArray(r.fields) ? r.fields : []
+  };
+}
+function itemToDb(i){
+  return {
+    id:String(i.id),
+    name:i.name || '',
+    cat:i.cat || null,
+    subcat:i.subcat || '',
+    qty:parseInt(i.qty,10) || 1,
+    condition:i.condition || 'dobro',
+    note:i.note || '',
+    custom:i.custom || {}
+  };
+}
+function dbToItem(r){
+  return {
+    id:r.id,
+    name:r.name || '',
+    cat:r.cat || '',
+    subcat:r.subcat || '',
+    qty:r.qty || 1,
+    condition:r.condition || 'dobro',
+    note:r.note || '',
+    custom:r.custom || {},
+    loans:[]
+  };
+}
+function ensureLoanId(loan){
+  if(!loan.id) loan.id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
+  return loan.id;
+}
+function loanToDb(item, loan){
+  ensureLoanId(loan);
+  return {
+    id:loan.id,
+    item_id:item.id,
+    borrower_id:loan.borrowerId || loan.borrower_id || null,
+    borrower_name:loan.borrower || loan.borrower_name || '',
+    email:loan.email || '',
+    qty:parseInt(loan.qty,10) || 1,
+    from_date:loan.from || loan.from_date || todayISO(),
+    until_date:loan.until || loan.until_date || null,
+    note:loan.note || '',
+    gid:loan.gid || null
+  };
+}
+function dbToLoan(r){
+  return {
+    id:r.id,
+    borrower:r.borrower_name || '',
+    email:r.email || '',
+    borrowerId:r.borrower_id || '',
+    qty:r.qty || 1,
+    from:r.from_date || todayISO(),
+    until:r.until_date || '',
+    note:r.note || '',
+    gid:r.gid || ''
+  };
+}
+function ensureLogId(e){
+  if(!e.id) e.id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2);
+  return e.id;
+}
+function logToDb(e){
+  ensureLogId(e);
+  return {
+    id:e.id,
+    type:e.type,
+    code:e.code || '',
+    name:e.name || '',
+    borrower_id:e.borrowerId || null,
+    borrower_name:e.borrower || '',
+    email:e.email || '',
+    qty:parseInt(e.qty,10) || 1,
+    until_date:e.until || null,
+    gid:e.gid || null
+  };
+}
+function dbToLog(r){
+  return {
+    id:r.id,
+    type:r.type,
+    code:r.code || '',
+    name:r.name || '',
+    borrower:r.borrower_name || '',
+    email:r.email || '',
+    borrowerId:r.borrower_id || '',
+    qty:r.qty || 1,
+    until:r.until_date || '',
+    gid:r.gid || '',
+    time:r.created_at ? new Date(r.created_at).toLocaleString('sl-SI') : ''
+  };
+}
+async function insertLogEntry(entry){
+  log.unshift(entry);
+  if(!supabaseReady()) return;
+  const { error } = await sb.from('log_entries').insert(logToDb(entry));
+  if(error) console.error('Napaka pri zapisu dnevnika:', error);
+}
+async function saveData(){
+  if(!supabaseReady()){
+    try{
+      localStorage.setItem(LS_KEY, JSON.stringify({ categories, inventory, log, users }));
+    }catch(e){ console.error('Shranjevanje ni uspelo', e); }
+    return;
+  }
+  if(isSaving) return;
+  isSaving = true;
+  try{
+    const catRows = categories.map(categoryToDb);
+    if(catRows.length){
+      const { error } = await sb.from('categories').upsert(catRows, { onConflict:'id' });
+      if(error) throw error;
+    }
+    const itemRows = inventory.map(itemToDb);
+    if(itemRows.length){
+      const { error } = await sb.from('items').upsert(itemRows, { onConflict:'id' });
+      if(error) throw error;
+    }
+  }catch(e){
+    console.error('Shranjevanje v Supabase ni uspelo:', e);
+    try{ toast('Shranjevanje v Supabase ni uspelo: ' + (e.message || e)); }catch(_e){}
+  }finally{
+    isSaving = false;
+  }
+}
+async function deleteDbRow(table, id){
+  if(!supabaseReady()) return;
+  const { error } = await sb.from(table).delete().eq('id', id);
+  if(error) throw error;
+}
+async function loadData(){
+  if(!supabaseReady()){
+    categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
+    inventory  = JSON.parse(JSON.stringify(DEFAULT_INVENTORY));
+    log        = [];
+    users      = JSON.parse(JSON.stringify(DEFAULT_USERS));
+    migrateData();
+    return;
+  }
+  assertSupabase();
+
+  const [catsR, itemsR, loansR, logsR, profilesR] = await Promise.all([
+    sb.from('categories').select('*').order('name'),
+    sb.from('items').select('*').order('id'),
+    sb.from('loans').select('*').order('from_date', { ascending:false }),
+    sb.from('log_entries').select('*').order('created_at', { ascending:false }).limit(1000),
+    sb.from('profiles').select('*').order('last_name').order('first_name')
+  ]);
+
+  if(catsR.error) throw catsR.error;
+  if(itemsR.error) throw itemsR.error;
+  if(loansR.error) throw loansR.error;
+  /* log_entries je lahko viden samo adminu; uporabnik dobi prazen dnevnik. */
+  if(logsR.error) console.warn('Dnevnik ni bil naložen:', logsR.error);
+  if(profilesR.error) throw profilesR.error;
+
+  categories = (catsR.data || []).map(dbToCategory);
+  inventory  = (itemsR.data || []).map(dbToItem);
+  const byId = new Map(inventory.map(i=>[i.id, i]));
+  for(const r of (loansR.data || [])){
+    const item = byId.get(r.item_id);
+    if(item) item.loans.push(dbToLoan(r));
+  }
+  log = (logsR.data || []).map(dbToLog);
+  users = (profilesR.data || []).map(profileRowToUser);
+  migrateData();
+}
+async function ensureCurrentProfile(authUser, meta){
+  if(!authUser) return null;
+  let { data: profile, error } = await sb.from('profiles').select('*').eq('id', authUser.id).maybeSingle();
+  if(error) throw error;
+  if(!profile){
+    const first = (meta && meta.first_name) || (authUser.user_metadata && authUser.user_metadata.first_name) || '';
+    const last  = (meta && meta.last_name)  || (authUser.user_metadata && authUser.user_metadata.last_name)  || '';
+    const row = { id:authUser.id, first_name:first, last_name:last, email:authUser.email, role:'user' };
+    const ins = await sb.from('profiles').insert(row).select('*').single();
+    if(ins.error) throw ins.error;
+    profile = ins.data;
+  }
+  return profileRowToUser(profile, authUser);
+}
+/* Migracija starih zapisov:
+   - vsaka kategorija dobi seznam stolpcev (šotori privzete popisne stolpce),
+   - stari šotorski popisi (item.tent) se preselijo v item.custom,
+   - vsak predmet ima zagotovljena polja loans in custom. */
+function migrateData(){
+  let changed = false;
+  for(const c of categories){
+    if(!Array.isArray(c.fields)){
+      c.fields = (c.id === 'sotori') ? tentFieldDefs() : [];
+      changed = true;
+    }
+    if(!Array.isArray(c.subcats)){ c.subcats = []; changed = true; }
+    for(const f of c.fields){
+      if(f.id==='tf_service' && f.type==='select' && f.colors === undefined){
+        f.colors = Object.assign({}, TENT_SERVICE_COLORS);
+        changed = true;
+      }
+    }
+  }
+  for(const i of inventory){
+    if(!Array.isArray(i.loans)){ i.loans = []; changed = true; }
+    if(!i.custom){ i.custom = {}; changed = true; }
+    if(i.tent){
+      const t = i.tent;
+      const roof  = Array.isArray(t.roof)  ? t.roof  : (t.roof  ? [t.roof]  : []);
+      const floor = Array.isArray(t.floor) ? t.floor : (t.floor ? [t.floor] : []);
+      i.custom.tf_repair  = !!t.repair;
+      i.custom.tf_roof    = roof;
+      i.custom.tf_floor   = floor;
+      i.custom.tf_service = t.service || '';
+      i.custom.tf_date    = t.date || '';
+      i.custom.tf_notes   = t.notes || '';
+      delete i.tent;
+      changed = true;
+    }
+    for(const l of i.loans || []) ensureLoanId(l);
+  }
+  if(!USE_SUPABASE && ensureUsers()) changed = true;
+  if(changed && !USE_SUPABASE) saveData();
+}
+/* Lokalni uporabniki ostanejo samo za razvojno rezervo, kadar Supabase ni nastavljen. */
+function ensureUsers(){
+  let changed = false;
+  if(!Array.isArray(users) || !users.length){
+    users = JSON.parse(JSON.stringify(DEFAULT_USERS));
+    changed = true;
+  }
+  for(const def of DEFAULT_USERS){
+    if(!users.some(u => u.username === def.username)){ users.push(JSON.parse(JSON.stringify(def))); changed = true; }
+  }
+  for(const u of users){
+    if(!u.id){ u.id = 'u_' + Math.random().toString(36).slice(2,9); changed = true; }
+    if(u.firstName === undefined){ u.firstName = u.display || u.username || ''; changed = true; }
+    if(u.lastName === undefined){ u.lastName = ''; changed = true; }
+    if(u.email === undefined){ u.email = ''; changed = true; }
+    if(u.role === undefined){ u.role = 'user'; changed = true; }
+  }
+  return changed;
+}
+
+/* =====================================================================
+   4. POMOŽNE FUNKCIJE
+===================================================================== */
+/* esc() poskrbi, da uporabniški vnos nikoli ne postane HTML (zaščita pred XSS) */
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function el(id){ return document.getElementById(id); }
+
+function todayISO(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function plusDaysISO(n){
+  const d = new Date(); d.setDate(d.getDate()+n);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function fmtDate(iso){
+  if(!iso) return '—';
+  const p = String(iso).split('-');
+  if(p.length !== 3) return esc(iso);
+  return p[2] + '. ' + p[1] + '. ' + p[0];
+}
+/* Razčleni ročno vpisan datum: "15. 6. 2026", "15.6.26" ali "2026-06-15" -> ISO.
+   Vrne '' za prazno polje in null za neveljaven vnos. */
+function parseDateInput(s){
+  s = String(s||'').trim();
+  if(!s) return '';
+  let d, mo, y;
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if(m){ y = +m[1]; mo = +m[2]; d = +m[3]; }
+  else{
+    m = s.match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{2,4})\.?$/);
+    if(!m) return null;
+    d = +m[1]; mo = +m[2]; y = +m[3];
+    if(y < 100) y += 2000;
+  }
+  if(y < 1990 || y > 2100) return null;
+  const dt = new Date(y, mo-1, d);
+  if(dt.getFullYear() !== y || dt.getMonth() !== mo-1 || dt.getDate() !== d) return null;
+  return y + '-' + String(mo).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+}
+function fmtDateInput(iso){
+  if(!iso) return '';
+  const p = String(iso).split('-');
+  if(p.length !== 3) return '';
+  return (+p[2]) + '. ' + (+p[1]) + '. ' + p[0];
+}
+
+function isOverdue(loan){ return !!(loan.until && loan.until < todayISO()); }
+function borrowedQty(item){ return (item.loans||[]).reduce((s,l)=>s+l.qty,0); }
+function availQty(item){ return item.qty - borrowedQty(item); }
+function itemHasOverdue(item){ return (item.loans||[]).some(isOverdue); }
+/* Status predmeta — zamuda ima prednost, da je vizualno takoj opazna */
+function itemStatus(item){
+  if(itemHasOverdue(item)) return { cls:'st-late', txt:'Zamuda ⚠', rank:3 };
+  const b = borrowedQty(item);
+  if(b === 0)        return { cls:'st-ok',   txt:'Na voljo',          rank:0 };
+  if(b < item.qty)   return { cls:'st-part', txt:'Delno izposojeno',  rank:1 };
+  return { cls:'st-out', txt:'Vse izposojeno', rank:2 };
+}
+function overdueLoanCount(){
+  return inventory.reduce((s,i)=>s+(i.loans||[]).filter(isOverdue).length, 0);
+}
+function catById(id){ return categories.find(c=>c.id===id); }
+function itemByCode(code){
+  const c = String(code).trim().toUpperCase();
+  return inventory.find(i => String(i.id).toUpperCase() === c);
+}
+function isAdmin(){ return currentUser && currentUser.role === 'admin'; }
+
+/* seznam znanih izposojevalcev za hitrejši vnos pri izposoji */
+function knownBorrowers(){
+  const s = new Set();
+  for(const i of inventory) for(const l of (i.loans||[])) if(l.borrower) s.add(l.borrower);
+  for(const e of log) if(e.borrower) s.add(e.borrower);
+  return Array.from(s).sort((a,b)=>String(a).localeCompare(String(b),'sl')).slice(0,60);
+}
+/* ---------- uporabniki ---------- */
+function userDisplay(u){
+  if(!u) return '';
+  const n = ((u.firstName||'') + ' ' + (u.lastName||'')).trim();
+  return n || u.username || u.email || '';
+}
+function userById(id){ return users.find(u=>u.id===id); }
+function sortedUsers(){
+  return users.slice().sort((a,b)=>userDisplay(a).localeCompare(userDisplay(b),'sl'));
+}
+/* možnosti za spustni seznam izbire tabornika pri izposoji */
+function userOptions(selectedId){
+  const list = isAdmin() ? sortedUsers() : sortedUsers().filter(u => currentUser && u.id === currentUser.id);
+  return list.map(u =>
+    '<option value="' + esc(u.id) + '"' + (u.id===selectedId?' selected':'') + '>' +
+    esc(userDisplay(u)) + (u.email?' — ' + esc(u.email):'') + '</option>').join('');
+}
+/* izpis osebe izposoje: ime priimek + e-mail (HTML, ubežan) */
+function whoHTML(o){
+  if(!o || !o.borrower) return '';
+  return esc(o.borrower) + (o.email ? '<br><small style="color:var(--ink-soft)">' + esc(o.email) + '</small>' : '');
+}
+/* izpis osebe v eni vrstici (npr. dnevnik) */
+function whoInline(o){
+  if(!o || !o.borrower) return '';
+  return esc(o.borrower) + (o.email ? ' <small style="color:var(--ink-soft)">&lt;' + esc(o.email) + '&gt;</small>' : '');
+}
+/* navadno besedilo (koledar, obvestila) */
+function whoText(o){
+  if(!o || !o.borrower) return '';
+  return o.borrower + (o.email ? ' <' + o.email + '>' : '');
+}
+
+/* =====================================================================
+   5. PRILAGODLJIVI STOLPCI PO KATEGORIJAH (kot Orca Scan)
+===================================================================== */
+function tentFieldDefs(){
+  return [
+    { id:'tf_repair',  name:'Popravilo',    type:'checkbox' },
+    { id:'tf_roof',    name:'Popis streha', type:'multiselect', options:TENT_ROOF.slice() },
+    { id:'tf_floor',   name:'Popis poden',  type:'multiselect', options:TENT_FLOOR.slice() },
+    { id:'tf_service', name:'Servis',       type:'select',      options:TENT_SERVICE.slice(), colors:Object.assign({}, TENT_SERVICE_COLORS) },
+    { id:'tf_date',    name:'Datum popisa', type:'date' },
+    { id:'tf_notes',   name:'Opombe',       type:'text' }
+  ];
+}
+function catFields(catId){
+  const c = catById(catId);
+  return (c && Array.isArray(c.fields)) ? c.fields : [];
+}
+function customVal(item, f){
+  if(!item.custom) item.custom = {};
+  let v = item.custom[f.id];
+  if(f.type==='multiselect' && !Array.isArray(v)){ v = v ? [v] : []; item.custom[f.id] = v; }
+  return v;
+}
+function fmtCustom(f, v){
+  if(f.type==='multiselect') return (v && v.length) ? v.join(', ') : '—';
+  if(f.type==='checkbox')    return v ? '✔' : '—';
+  if(f.type==='date')        return v ? fmtDate(v) : '—';
+  return (v !== undefined && v !== null && v !== '') ? String(v) : '—';
+}
+/* barva, dodeljena izbrani možnosti stolpca (ali null) */
+function optColor(f, value){
+  return (f && f.colors && value && f.colors[value]) ? f.colors[value] : null;
+}
+/* črna ali bela pisava glede na svetlost ozadja značke */
+function pillTextColor(hex){
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex||''));
+  if(!m) return '#fff';
+  const n = parseInt(m[1], 16);
+  const lum = 0.299*(n>>16 & 255) + 0.587*(n>>8 & 255) + 0.114*(n & 255);
+  return lum > 150 ? '#23291F' : '#fff';
+}
+function optPillHTML(f, value){
+  const c = optColor(f, value);
+  if(c) return '<span class="optpill" style="background:' + esc(c) + ';color:' + pillTextColor(c) + '">' + esc(value) + '</span>';
+  return '<span class="optpill neutral">' + esc(value) + '</span>';
+}
+/* prikaz vrednosti stolpca samo za branje; pri seznamih z barvami kot barvne značke */
+function customDisplayHTML(f, v){
+  const hasColors = f.colors && Object.keys(f.colors).length;
+  if(f.type==='select' && v && hasColors) return optPillHTML(f, v);
+  if(f.type==='multiselect' && Array.isArray(v) && v.length && hasColors){
+    return v.map(o=>optPillHTML(f, o)).join(' ');
+  }
+  return esc(fmtCustom(f, v));
+}
+async function setCustom(itemId, fid, value){
+  const item = itemByCode(itemId);
+  if(!item || !isAdmin()) return;
+  if(!item.custom) item.custom = {};
+  item.custom[fid] = value;
+  try{
+    const { error } = await sb.from('items').update({ custom:item.custom }).eq('id', item.id);
+    if(error) throw error;
+  }catch(e){
+    console.error(e);
+    toast('Stolpec ni bil shranjen: ' + (e.message || e));
+  }
+}
+/* celica prilagodljivega stolpca v tabeli; admin ureja, uporabnik samo bere */
+function customCellHTML(item, f){
+  const v = customVal(item, f);
+  if(!isAdmin()){
+    return '<td style="font-size:13px' + (f.type==='checkbox'?';text-align:center':'') + '">' +
+      (f.type==='checkbox' && v ? '<span class="overdue">✔</span>' : customDisplayHTML(f, v)) + '</td>';
+  }
+  const idA = ' data-id="' + esc(item.id) + '" data-fid="' + esc(f.id) + '"';
+  if(f.type==='checkbox'){
+    return '<td style="text-align:center"><input type="checkbox" class="tentchk" data-change="customChk"' + idA + (v?' checked':'') + '></td>';
+  }
+  if(f.type==='select'){
+    const sc = optColor(f, v);     // izbrana možnost obarva celoten izbirnik
+    let h = '<td><select class="tentctl" data-change="customSel"' + idA +
+      (sc ? ' style="color:' + esc(sc) + ';border-color:' + esc(sc) + ';font-weight:700"' : '') + '>' +
+      '<option value=""' + (!v?' selected':'') + '>—</option>';
+    for(const o of (f.options||[])){
+      h += '<option value="' + esc(o) + '"' + (v===o?' selected':'') + '>' + esc(o) + '</option>';
+    }
+    return h + '</select></td>';
+  }
+  if(f.type==='multiselect'){
+    const lbl = fmtCustom(f, v);
+    const hasColors = f.colors && Object.keys(f.colors).length;
+    const inner = (hasColors && Array.isArray(v) && v.length) ? v.map(o=>optPillHTML(f, o)).join(' ') : esc(lbl);
+    return '<td><button class="tentmulti" data-act="multiField"' + idA + ' title="' + esc(lbl) + '">' + inner + '</button></td>';
+  }
+  if(f.type==='date'){
+    return '<td><input type="text" class="tentctl tentdate" data-change="customDate"' + idA +
+      ' value="' + esc(fmtDateInput(v||'')) + '" placeholder="d. m. llll"></td>';
+  }
+  if(f.type==='number'){
+    return '<td><input type="number" class="tentctl" style="width:80px" data-change="customTxt"' + idA + ' value="' + esc(v??'') + '"></td>';
+  }
+  return '<td><input type="text" class="tentctl tentnote" data-change="customTxt"' + idA + ' value="' + esc(v||'') + '" placeholder="…"></td>';
+}
+/* okno z več izbirami (npr. popis strehe/podna) */
+function openMultiField(itemId, fieldId){
+  const item = itemByCode(itemId);
+  if(!item || !isAdmin()) return;
+  const f = catFields(item.cat).find(x=>x.id===fieldId);
+  if(!f) return;
+  const cur = customVal(item, f);
+  let h = '<h3>' + esc(f.name) + ' — ' + esc(item.name) + ' <span class="tag">' + esc(item.id) + '</span></h3>' +
+    '<div class="hint">Označi vse ustrezne možnosti.' +
+    ((f.options||[]).includes('OK') ? ' Izbira »OK« izključi ostale.' : '') + '</div>' +
+    '<div class="multilist">';
+  for(const o of (f.options||[])){
+    const oc = optColor(f, o);
+    h += '<label class="multiopt"><input type="checkbox" class="tmchk" data-change="multiChk" value="' + esc(o) + '"' +
+      (cur.includes(o)?' checked':'') + '>' +
+      (oc ? '<span class="optdot" style="background:' + esc(oc) + '"></span>' : '') +
+      '<span>' + esc(o) + '</span></label>';
+  }
+  h += '</div><div class="actions">' +
+    '<button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
+    '<button class="btn btn-primary" data-act="multiSave" data-id="' + esc(item.id) + '" data-fid="' + esc(f.id) + '">Shrani</button>' +
+    '</div>';
+  openModal(h);
+}
+/* pravilo: »OK« izključi vse ostale možnosti in obratno */
+function multiExclusive(chk){
+  if(!chk.checked) return;
+  const all = document.querySelectorAll('.tmchk');
+  if(chk.value === 'OK'){
+    all.forEach(c => { if(c !== chk) c.checked = false; });
+  } else {
+    all.forEach(c => { if(c.value === 'OK') c.checked = false; });
+  }
+}
+function saveMultiField(itemId, fieldId){
+  const item = itemByCode(itemId);
+  if(!item) return;
+  if(!item.custom) item.custom = {};
+  item.custom[fieldId] = Array.from(document.querySelectorAll('.tmchk:checked')).map(c=>c.value);
+  saveData();
+  closeModal();
+  switchView(activeNav);
+  toast('Shranjeno.');
+}
+
+/* =====================================================================
+   6. PRIJAVA IN VLOGE
+===================================================================== */
+async function doLogin(){
+  const email = el('loginUser').value.trim();
+  const password = el('loginPass').value;
+  if(!email || !password){
+    el('loginErr').textContent = 'Vpiši e-mail in geslo.';
+    return;
+  }
+  el('loginErr').textContent = '';
+  try{
+    assertSupabase();
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if(error) throw error;
+    await loadData();
+    currentUser = await ensureCurrentProfile(data.user);
+    if(!users.some(u=>u.id===currentUser.id)) users.push(currentUser);
+    el('loginPass').value = '';
+    enterApp();
+  }catch(e){
+    console.error(e);
+    el('loginErr').textContent = 'Prijava ni uspela: ' + (e.message || e);
+  }
+}
+function showRegister(on){
+  el('loginForm').style.display = on ? 'none' : '';
+  el('registerForm').style.display = on ? '' : 'none';
+  el('loginErr').textContent = '';
+  el('loginErr2').textContent = '';
+  if(on){ el('regFirst').focus(); }
+  else  { el('loginUser').focus(); }
+}
+/* Registracija uporabnika prek Supabase Auth. Vloga je vedno user; admin se nastavi v Supabase tabeli profiles. */
+async function createUser(data, errEl){
+  const fail = msg => { if(errEl) errEl.textContent = msg; else toast(msg); return null; };
+  const first = (data.firstName||'').trim();
+  const last  = (data.lastName||'').trim();
+  const email = (data.email||'').trim();
+  const pass  = data.password||'';
+  if(!first || !last) return fail('Vpiši ime in priimek.');
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Vpiši veljaven e-mail naslov.');
+  if(pass.length < 6) return fail('Geslo naj ima vsaj 6 znakov.');
+  try{
+    assertSupabase();
+    const { data:res, error } = await sb.auth.signUp({
+      email,
+      password:pass,
+      options:{ data:{ first_name:first, last_name:last } }
+    });
+    if(error) throw error;
+
+    /* Če je potrjevanje e-maila izklopljeno, Supabase vrne sejo in lahko takoj vstopimo.
+       Če je potrjevanje vklopljeno, uporabnik najprej potrdi e-mail. */
+    if(res && res.user && res.session){
+      const user = await ensureCurrentProfile(res.user, { first_name:first, last_name:last });
+      currentUser = user;
+      await loadData();
+      if(!users.some(u=>u.id===user.id)) users.push(user);
+      return user;
+    }
+    fail('Račun je ustvarjen. Preveri e-mail in potrdi registracijo, nato se prijavi.');
+    return null;
+  }catch(e){
+    console.error(e);
+    return fail('Registracija ni uspela: ' + (e.message || e));
+  }
+}
+async function doRegister(){
+  const user = await createUser({
+    firstName: el('regFirst').value,
+    lastName:  el('regLast').value,
+    email:     el('regEmail').value,
+    password:  el('regPass').value,
+    role:      'user'
+  }, el('loginErr2'));
+  if(!user) return;
+  ['regFirst','regLast','regEmail','regPass'].forEach(id=>{ el(id).value=''; });
+  enterApp();
+}
+async function doLogout(){
+  currentUser = null;
+  if(supabaseReady()) await sb.auth.signOut();
+  el('app').classList.remove('on');
+  el('loginScreen').style.display = 'flex';
+  showRegister(false);
+  el('loginUser').focus();
+}
+function enterApp(){
+  el('loginScreen').style.display = 'none';
+  el('app').classList.add('on');
+  el('userName').textContent = userDisplay(currentUser);
+  el('userRole').textContent = isAdmin() ? 'admin' : 'uporabnik';
+  buildSidebar();
+  updateFab();
+  switchView('scan');
+}
+
+/* =====================================================================
+   7. NAVIGACIJA IN PREKLOP POGLEDOV
+===================================================================== */
+function toggleSidebar(force){
+  const open = el('sidebar').classList.toggle('open', force);
+  el('sideBackdrop').classList.toggle('on', open);
+}
+function closeSidebarMobile(){ toggleSidebar(false); }
+
+function buildSidebar(){
+  let h = '<div class="snav">';
+  h += '<div class="snav-label">Delo</div>';
+  h += navBtn('scan','📷','Skeniraj');
+  h += navBtn('cart','🛒','Izposoja', cart.length || null);
+  h += navBtn('browse','📦','Pregled opreme');
+  h += navBtn('all','🗂️','Vsa oprema');
+  if(isAdmin()){
+    h += '<div class="snav-label">Gospodar</div>';
+    h += navBtn('log','📋','Dnevnik');
+    h += navBtn('qr','🏷️','QR nalepke');
+    h += navBtn('excel','⬇️','Excel izvoz');
+    h += navBtn('backup','💾','Varnostna kopija');
+    h += navBtn('users','👥','Uporabniki');
+    h += navBtn('cats','⚙️','Kategorije');
+  }
+  h += '<div class="snav-label">Kategorije</div>';
+  for(const c of categories){
+    const items = inventory.filter(i=>i.cat===c.id);
+    const out = items.reduce((s,i)=>s+borrowedQty(i),0);
+    const act = (activeNav==='browse' && browseState.cat===c.id);
+    h += '<button class="' + (act?'active':'') + '" data-act="cat" data-id="' + esc(c.id) + '">' +
+         '<span>' + esc(c.icon) + '</span><span>' + esc(c.name) + '</span>' +
+         (out>0 ? '<span class="badge">' + out + '</span>' : '') +
+         '</button>';
+  }
+  h += '</div>';
+  el('sidebar').innerHTML = h;
+}
+function navBtn(id,ico,label,badge){
+  const act = (activeNav===id && !(id==='browse' && browseState.cat));
+  return '<button class="' + (act?'active':'') + '" data-act="nav" data-view="' + id + '">' +
+    '<span>' + ico + '</span><span>' + label + '</span>' +
+    (badge ? '<span class="badge">' + badge + '</span>' : '') + '</button>';
+}
+function gotoCat(catId){
+  browseState = { cat:catId, subcat:null, q:'' };
+  switchView('browse');
+}
+function switchView(v){
+  if(!isAdmin() && ['log','qr','excel','cats','backup','users'].includes(v)) v = 'scan';
+  if(v !== activeNav) tableSort = { key:null, dir:1 };   // nova vsebina -> ponastavi razvrščanje
+  activeNav = v;
+  if(v !== 'browse') browseState = { cat:null, subcat:null, q:'' };
+  closeSidebarMobile();
+  buildSidebar();
+  updateFab();
+  const m = el('main');
+  if(v==='scan')   renderScan(m);
+  if(v==='cart')   renderCart(m);
+  if(v==='browse') renderBrowse(m);
+  if(v==='all')    renderAll(m);
+  if(v==='log')    renderLog(m);
+  if(v==='qr')     renderQR(m);
+  if(v==='excel')  renderExcel(m);
+  if(v==='backup') renderBackup(m);
+  if(v==='users')  renderUsers(m);
+  if(v==='cats')   renderCats(m);
+}
+/* po izposoji/vračilu osveži trenutni pogled (in skenirano kartico) */
+function refreshCurrent(code){
+  buildSidebar();
+  updateFab();
+  if(activeNav==='scan'){
+    const inp = el('scanInput');
+    if(inp && code){ inp.value = code; handleScan(code); }
+  } else {
+    switchView(activeNav);
+  }
+}
+
+/* =====================================================================
+   8. POGLEDI: SKENIRANJE, PREGLED, VSA OPREMA
+===================================================================== */
+function renderScan(m){
+  m.innerHTML =
+    '<h2 class="view-title">Skeniraj predmet</h2>' +
+    '<div class="view-sub">Skeniraj QR/črtno kodo s skenerjem (USB ali Bluetooth) ali vpiši kodo in pritisni Enter.</div>' +
+    '<div class="scanbox">' +
+      '<input class="scaninput" id="scanInput" placeholder="npr. SOT-001" autocomplete="off">' +
+      '<div id="scanResult" class="scanresult"></div>' +
+    '</div>';
+  const inp = el('scanInput');
+  inp.addEventListener('keydown', e=>{
+    if(e.key==='Enter'){ handleScan(inp.value); inp.select(); }
+  });
+  inp.focus();
+}
+function handleScan(code){
+  const box = el('scanResult');
+  if(!code.trim()){ box.innerHTML=''; return; }
+  const item = itemByCode(code);
+  if(!item){
+    box.innerHTML = '<div class="scanerr">Koda <span class="tag">' + esc(code.trim().toUpperCase()) + '</span> ne obstaja v inventarju.</div>';
+    return;
+  }
+  box.innerHTML = itemCardHTML(item, 'scan');
+}
+
+/* kartica predmeta (skeniranje in podrobnosti) */
+function itemCardHTML(item, ctx){
+  const cat = catById(item.cat);
+  const st = itemStatus(item);
+  const av = availQty(item);
+  const lateLoans = (item.loans||[]).filter(isOverdue);
+  let h = '<div class="itemcard">' +
+    '<span class="tag">' + esc(item.id) + '</span>' +
+    '<h3>' + esc(item.name) + '</h3>' +
+    '<div class="sub">' + (cat?esc(cat.icon)+' '+esc(cat.name):'') + (item.subcat?' › '+esc(item.subcat):'') +
+      (item.condition?' · stanje: '+esc(item.condition):'') + '</div>' +
+    '<span class="status ' + st.cls + '">' + st.txt + '</span>';
+  if(lateLoans.length){
+    h += '<div class="card-late">⚠ Zamuda pri vračilu: ' +
+      lateLoans.map(l=>esc(l.borrower) + ' (do ' + fmtDate(l.until) + ')').join(', ') + '</div>';
+  }
+  h += '<div class="qtyrow">' +
+      '<div class="qtybox"><b>' + item.qty + '</b><span>Skupaj</span></div>' +
+      '<div class="qtybox"><b style="color:var(--ok)">' + av + '</b><span>Na voljo</span></div>' +
+      '<div class="qtybox"><b style="color:var(--ember)">' + borrowedQty(item) + '</b><span>Izposojeno</span></div>' +
+    '</div>';
+  if(item.loans && item.loans.length){
+    h += '<div class="loanlist">';
+    for(const l of item.loans){
+      h += '<div class="loanrow' + (isOverdue(l)?' late':'') + '">' +
+        '<span class="who">' + whoHTML(l) + '</span>' +
+        '<span>' + l.qty + ' kos' + (l.qty===1?'':'ov') + '</span>' +
+        '<span>od ' + fmtDate(l.from) + '</span>' +
+        '<span class="' + (isOverdue(l)?'overdue':'') + '">do ' + fmtDate(l.until) + (isOverdue(l)?' ⚠ ZAMUDA':'') + '</span>' +
+        (l.note?'<span style="color:var(--ink-soft)">('+esc(l.note)+')</span>':'') +
+      '</div>';
+    }
+    h += '</div>';
+  }
+  if(item.note) h += '<div class="sub">Opomba: ' + esc(item.note) + '</div>';
+  /* vrednosti prilagodljivih stolpcev kategorije */
+  const cfs = catFields(item.cat);
+  if(cfs.length){
+    const lines = [];
+    for(const f of cfs){
+      const v = customVal(item, f);
+      const has = f.type==='multiselect' ? v.length : (f.type==='checkbox' ? v : (v !== undefined && v !== null && v !== ''));
+      if(has) lines.push('<br>' + esc(f.name) + ': ' + (f.type==='checkbox' ? '<span class="overdue">✔ da</span>' : customDisplayHTML(f, v)));
+    }
+    if(lines.length){
+      h += '<div class="sub" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">' +
+        '<b>Podatki kategorije</b>' + lines.join('') + '</div>';
+    }
+  }
+  h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">';
+  if(av > 0) h += '<button class="btn btn-accent" data-act="borrow" data-id="' + esc(item.id) + '">↗ Izposodi</button>';
+  if(borrowedQty(item) > 0) h += '<button class="btn btn-primary" data-act="return" data-id="' + esc(item.id) + '">↩ Vrni</button>';
+  if(isAdmin()) h += '<button class="btn btn-ghost" data-act="itemEdit" data-id="' + esc(item.id) + '">Uredi</button>';
+  h += '</div></div>';
+  return h;
+}
+
+/* ---------- PREGLED OPREME (kategorije -> tabela s filtri) ---------- */
+function renderBrowse(m){
+  if(!browseState.cat) return renderBrowseRoot(m);
+  renderBrowseCat(m, browseState.cat);
+}
+function crumbsHTML(parts){
+  return '<div class="crumbs">' + parts.join(' <span style="opacity:.5">›</span> ') + '</div>';
+}
+function overdueBannerHTML(){
+  const n = overdueLoanCount();
+  if(!n) return '';
+  return '<div class="banner-warn">⚠ <span><b>' + n + '</b> izposoj' + (n===1?'a ima':(n===2?'i imata':' ima')) +
+    ' zamudo pri vračilu.</span>' +
+    '<button class="btn btn-danger btn-sm" data-act="showOverdue">Pokaži zamude</button></div>';
+}
+function renderBrowseRoot(m){
+  const total = inventory.reduce((s,i)=>s+i.qty,0);
+  const out = inventory.reduce((s,i)=>s+borrowedQty(i),0);
+  let h = '<h2 class="view-title">Pregled opreme</h2>' +
+    '<div class="view-sub">Izberi kategorijo ali poišči predmet po imenu oziroma kodi.</div>' +
+    overdueBannerHTML() +
+    '<div class="stats">' +
+      '<div class="stat"><b>' + total + '</b><span>Vseh kosov</span></div>' +
+      '<div class="stat s-ok"><b>' + (total-out) + '</b><span>Na voljo</span></div>' +
+      '<div class="stat s-warn"><b>' + out + '</b><span>Izposojeno</span></div>' +
+    '</div>' +
+    '<div class="toolrow">' +
+      '<input type="search" id="globalSearch" data-input="globalSearch" placeholder="Išči po vseh predmetih …">' +
+      (isAdmin()?'<button class="btn btn-primary" data-act="itemNew">+ Dodaj predmet</button>':'') +
+    '</div>' +
+    '<div id="globalResults"></div>' +
+    '<div class="cardgrid" id="catGrid">';
+  for(const c of categories){
+    const items = inventory.filter(i=>i.cat===c.id);
+    const t = items.reduce((s,i)=>s+i.qty,0);
+    const o = items.reduce((s,i)=>s+borrowedQty(i),0);
+    h += '<div class="catcard" data-act="cat" data-id="' + esc(c.id) + '">' +
+      (o>0?'<span class="outchip">' + o + ' zunaj</span>':'') +
+      '<div class="ico">' + esc(c.icon) + '</div>' +
+      '<h3>' + esc(c.name) + '</h3>' +
+      '<div class="meta">' + items.length + ' predmetov · ' + t + ' kosov</div>' +
+      '<div class="meter"><i style="width:' + (t?Math.round(o/t*100):0) + '%"></i></div>' +
+    '</div>';
+  }
+  h += '</div>';
+  m.innerHTML = h;
+}
+function globalSearch(q){
+  const box = el('globalResults');
+  const grid = el('catGrid');
+  q = q.trim().toLowerCase();
+  if(!q){ box.innerHTML=''; grid.style.display='grid'; return; }
+  grid.style.display='none';
+  const hits = inventory.filter(i =>
+    i.name.toLowerCase().includes(q) || String(i.id).toLowerCase().includes(q) ||
+    (i.subcat||'').toLowerCase().includes(q));
+  box.innerHTML = itemsTableHTML(sortItems(hits), { showCat:true });
+}
+function renderBrowseCat(m, catId){
+  const c = catById(catId);
+  if(!c){ browseState={cat:null,subcat:null,q:''}; return renderBrowseRoot(m); }
+  const active = browseState.subcat; // null = vse
+  const allItems = inventory.filter(i=>i.cat===catId);
+  const items = browseFiltered(allItems);
+  const t = items.reduce((s,i)=>s+i.qty,0);
+  const o = items.reduce((s,i)=>s+borrowedQty(i),0);
+
+  let chips = '<div class="chips">' +
+    '<button class="chip' + (!active?' active':'') + '" data-act="subFilter">Vse' +
+      '<span class="cnt">' + allItems.length + '</span></button>';
+  for(const s of c.subcats){
+    const cnt = allItems.filter(i=>i.subcat===s).length;
+    chips += '<button class="chip' + (active===s?' active':'') + '" data-act="subFilter" data-sub="' + esc(s) + '">' +
+      esc(s) + '<span class="cnt">' + cnt + '</span></button>';
+  }
+  chips += '</div>';
+
+  m.innerHTML = crumbsHTML([
+      '<a data-act="nav" data-view="browse">Pregled</a>',
+      esc(c.name) + (active?' <span style="opacity:.5">›</span> ' + esc(active):'')]) +
+    '<h2 class="view-title">' + esc(c.icon) + ' ' + esc(c.name) + '</h2>' +
+    '<div class="view-sub">Klikni na filter za prikaz posamezne podkategorije; stolpce razvrstiš s klikom na njihov naslov.</div>' +
+    chips +
+    '<div class="stats">' +
+      '<div class="stat"><b>' + t + '</b><span>Vseh kosov</span></div>' +
+      '<div class="stat s-ok"><b>' + (t-o) + '</b><span>Na voljo</span></div>' +
+      '<div class="stat s-warn"><b>' + o + '</b><span>Izposojeno</span></div>' +
+    '</div>' +
+    '<div class="toolrow">' +
+      '<input type="search" data-input="browseSearch" placeholder="Išči po imenu ali kodi …" value="' + esc(browseState.q) + '">' +
+      (isAdmin()?'<button class="btn btn-primary" data-act="itemNew" data-cat="' + esc(catId) + '"' +
+        (active?' data-sub="' + esc(active) + '"':'') + '>+ Dodaj predmet</button>':'') +
+      '<span class="result-cnt">' + items.length + ' predmetov</span>' +
+    '</div>' +
+    '<div id="tableHost">' + itemsTableHTML(sortItems(items), { fields: catFields(catId), sortable:true }) + '</div>';
+}
+function browseFiltered(allItems){
+  let items = browseState.subcat ? allItems.filter(i=>i.subcat===browseState.subcat) : allItems;
+  if(browseState.q){
+    const q = browseState.q.toLowerCase();
+    items = items.filter(i => i.name.toLowerCase().includes(q) || String(i.id).toLowerCase().includes(q));
+  }
+  return items;
+}
+/* osveži samo tabelo (iskalnik obdrži fokus) */
+function updateBrowseTable(){
+  const allItems = inventory.filter(i=>i.cat===browseState.cat);
+  const items = browseFiltered(allItems);
+  el('tableHost').innerHTML = itemsTableHTML(sortItems(items), { fields: catFields(browseState.cat), sortable:true });
+  const cnt = document.querySelector('.result-cnt');
+  if(cnt) cnt.textContent = items.length + ' predmetov';
+}
+
+/* ---------- skupna tabela predmetov ---------- */
+function sortItems(items){
+  if(!tableSort.key) return items;
+  const k = tableSort.key, d = tableSort.dir;
+  const val = i => {
+    if(k==='id')     return String(i.id);
+    if(k==='name')   return String(i.name);
+    if(k==='cat'){ const c = catById(i.cat); return c ? c.name : ''; }
+    if(k==='qty')    return availQty(i);
+    if(k==='status') return itemStatus(i).rank;
+    return '';
+  };
+  return items.slice().sort((a,b)=>{
+    const va = val(a), vb = val(b);
+    if(typeof va === 'number') return (va - vb) * d;
+    return String(va).localeCompare(String(vb), 'sl') * d;
+  });
+}
+function thSort(key, label, sortable){
+  if(!sortable) return '<th>' + label + '</th>';
+  const arrow = tableSort.key===key ? '<span class="arrow">' + (tableSort.dir===1?'▲':'▼') + '</span>' : '';
+  return '<th class="th-sort" data-act="sort" data-key="' + key + '" title="Razvrsti">' + label + arrow + '</th>';
+}
+function loansCellHTML(i){
+  const ls = i.loans||[];
+  if(!ls.length) return '—';
+  const full = ls.map(l=>whoText(l)+' ('+l.qty+')').join(', ');
+  let h = ls.slice(0,2).map(l =>
+    whoHTML(l) + ' (' + l.qty + (isOverdue(l)?' <span class="overdue">⚠</span>':'') + ')').join('<br>');
+  if(ls.length>2) h += ' <span class="more" title="' + esc(full) + '">+' + (ls.length-2) + '</span>';
+  return h;
+}
+function itemsTableHTML(items, opts){
+  opts = opts || {};
+  if(!items.length) return '<div class="tablewrap"><div class="empty">Ni predmetov, ki bi ustrezali filtrom.</div></div>';
+  const fields = opts.fields || [];
+  const so = !!opts.sortable;
+  let h = '<div class="tablewrap"><table><thead><tr>' +
+    thSort('id','Koda',so) + thSort('name','Predmet',so) +
+    (opts.showCat ? thSort('cat','Kategorija',so) : '') +
+    thSort('qty','Na voljo',so) + thSort('status','Status',so) +
+    '<th>Izposojeno pri</th>' +
+    fields.map(f=>'<th>' + esc(f.name) + '</th>').join('') +
+    '</tr></thead><tbody>';
+  for(const i of items){
+    const st = itemStatus(i);
+    h += '<tr class="rowlink" data-id="' + esc(i.id) + '" title="Klikni za podrobnosti">' +
+      '<td><span class="tag">' + esc(i.id) + '</span></td>' +
+      '<td>' + esc(i.name) + '</td>';
+    if(opts.showCat){
+      const c = catById(i.cat);
+      h += '<td style="font-size:13px;white-space:nowrap">' + (c?esc(c.icon)+' '+esc(c.name):'—') +
+        (i.subcat?'<br><span style="color:var(--ink-soft);font-size:12px">' + esc(i.subcat) + '</span>':'') + '</td>';
+    }
+    h += '<td class="qtycell">' + availQty(i) + ' / ' + i.qty + '</td>' +
+      '<td><span class="status ' + st.cls + '">' + st.txt + '</span></td>' +
+      '<td style="font-size:13px">' + loansCellHTML(i) + '</td>';
+    for(const f of fields) h += customCellHTML(i, f);
+    h += '</tr>';
+  }
+  h += '</tbody></table></div>';
+  return h;
+}
+function showItemDetail(id){
+  const item = itemByCode(id);
+  if(!item) return;
+  openModal('<h3>Podrobnosti predmeta</h3>' + itemCardHTML(item,'detail') +
+    '<div class="actions"><button class="btn btn-ghost" data-act="modalClose">Zapri</button></div>');
+}
+
+/* ---------- VSA OPREMA — celoten inventar s filtri in razvrščanjem ---------- */
+function applyAllFilter(){
+  return inventory.filter(i=>{
+    if(allFilter.cat && i.cat !== allFilter.cat) return false;
+    if(allFilter.status){
+      const b = borrowedQty(i);
+      if(allFilter.status==='ok'      && b !== 0) return false;
+      if(allFilter.status==='part'    && !(b>0 && b<i.qty)) return false;
+      if(allFilter.status==='out'     && b !== i.qty) return false;
+      if(allFilter.status==='overdue' && !itemHasOverdue(i)) return false;
+    }
+    if(allFilter.q){
+      const q = allFilter.q.toLowerCase();
+      if(!(i.name.toLowerCase().includes(q) || String(i.id).toLowerCase().includes(q) ||
+           (i.subcat||'').toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
+}
+function updateAllTable(){
+  const items = applyAllFilter();
+  el('tableHost').innerHTML = itemsTableHTML(sortItems(items), { showCat:true, sortable:true });
+  const cnt = document.querySelector('.result-cnt');
+  if(cnt) cnt.textContent = items.length + ' predmetov';
+  const ch = el('allClearChip');
+  if(ch) ch.style.display = (allFilter.cat || allFilter.status || allFilter.q) ? '' : 'none';
+}
+function renderAll(m){
+  const items = applyAllFilter();
+  const total = items.reduce((s,i)=>s+i.qty,0);
+  const out = items.reduce((s,i)=>s+borrowedQty(i),0);
+  const lateCnt = items.filter(itemHasOverdue).length;
+  const filtered = !!(allFilter.cat || allFilter.status || allFilter.q);
+
+  let catChips = '<div class="chips"><span class="chips-label">Kategorija</span>' +
+    '<button class="chip chip-sm' + (!allFilter.cat?' active':'') + '" data-act="allCat">Vse' +
+      '<span class="cnt">' + inventory.length + '</span></button>';
+  for(const c of categories){
+    const cnt = inventory.filter(i=>i.cat===c.id).length;
+    if(!cnt) continue;
+    catChips += '<button class="chip chip-sm' + (allFilter.cat===c.id?' active':'') + '" data-act="allCat" data-id="' + esc(c.id) + '">' +
+      esc(c.icon) + ' ' + esc(c.name) + '<span class="cnt">' + cnt + '</span></button>';
+  }
+  catChips += '</div>';
+
+  let stChips = '<div class="chips" style="margin-top:-4px"><span class="chips-label">Status</span>' +
+    '<button class="chip chip-sm' + (!allFilter.status?' active':'') + '" data-act="allStatus">Vsi</button>';
+  for(const s of ALL_STATUSES){
+    stChips += '<button class="chip chip-sm' + (allFilter.status===s.id?' active':'') + '" data-act="allStatus" data-id="' + s.id + '">' + s.label + '</button>';
+  }
+  stChips += '<button class="chip chip-sm chip-clear" id="allClearChip" data-act="allClear"' +
+    (filtered?'':' style="display:none"') + '>✕ Počisti filtre</button></div>';
+
+  m.innerHTML =
+    '<h2 class="view-title">Vsa oprema</h2>' +
+    '<div class="view-sub">Celoten inventar — filtriraj po kategoriji, statusu ali z iskanjem; stolpce razvrstiš s klikom na njihov naslov.</div>' +
+    overdueBannerHTML() +
+    catChips + stChips +
+    '<div class="stats">' +
+      '<div class="stat"><b>' + items.length + '</b><span>Predmetov</span></div>' +
+      '<div class="stat"><b>' + total + '</b><span>Vseh kosov</span></div>' +
+      '<div class="stat s-ok"><b>' + (total-out) + '</b><span>Na voljo</span></div>' +
+      '<div class="stat s-warn"><b>' + out + '</b><span>Izposojeno</span></div>' +
+      (lateCnt?'<div class="stat s-alert"><b>' + lateCnt + '</b><span>Z zamudo</span></div>':'') +
+    '</div>' +
+    '<div class="toolrow">' +
+      '<input type="search" id="allSearch" data-input="allSearch" placeholder="Išči po imenu, kodi ali podkategoriji …" value="' + esc(allFilter.q) + '">' +
+      (isAdmin()?'<button class="btn btn-primary" data-act="itemNew">+ Dodaj predmet</button>':'') +
+      '<span class="result-cnt">' + items.length + ' predmetov</span>' +
+    '</div>' +
+    '<div id="tableHost">' + itemsTableHTML(sortItems(items), { showCat:true, sortable:true }) + '</div>';
+}
+
+/* =====================================================================
+   9. IZPOSOJA IN VRAČILO
+===================================================================== */
+function openBorrowModal(id){
+  const item = itemByCode(id);
+  if(!item) return;
+  const av = availQty(item);
+  if(av<=0){ toast('Ni razpoložljivih kosov.'); return; }
+  openModal(
+    '<h3>Izposoja — ' + esc(item.name) + ' <span class="tag">' + esc(item.id) + '</span></h3>' +
+    '<div class="availbar"><b>' + av + '</b><span class="lbl">od ' + item.qty + ' kosov<br>na voljo</span>' +
+      '<span class="meter"><i style="width:' + Math.round(borrowedQty(item)/item.qty*100) + '%"></i></span></div>' +
+    '<div class="field"><label>Tabornik (registriran uporabnik)</label>' +
+      '<select id="bWho"><option value="">— izberi uporabnika —</option>' + userOptions(currentUser?currentUser.id:'') + '</select></div>' +
+    '<div class="fieldrow">' +
+      '<div class="field"><label>Količina</label>' +
+        '<div class="qtystep">' +
+          '<button type="button" data-act="qtyStep" data-target="bQty" data-d="-1" aria-label="Manj">−</button>' +
+          '<input id="bQty" type="number" min="1" max="' + av + '" value="1">' +
+          '<button type="button" data-act="qtyStep" data-target="bQty" data-d="1" aria-label="Več">+</button>' +
+        '</div></div>' +
+      '<div class="field"><label>Vrni do</label><input id="bUntil" type="date" value="' + plusDaysISO(14) + '">' +
+        '<div class="duechips">' +
+          '<button type="button" class="chip chip-sm" data-act="due" data-days="7">+7 dni</button>' +
+          '<button type="button" class="chip chip-sm" data-act="due" data-days="14">+14 dni</button>' +
+          '<button type="button" class="chip chip-sm" data-act="due" data-days="30">+30 dni</button>' +
+        '</div></div>' +
+    '</div>' +
+    '<div class="field"><label>Opomba (neobvezno)</label><input id="bNote"></div>' +
+    '<div class="actions">' +
+      '<button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
+      '<button class="btn btn-accent" data-act="borrowSave" data-id="' + esc(item.id) + '">↗ Izposodi</button>' +
+    '</div>');
+  el('bWho').focus();
+}
+async function submitBorrow(id){
+  const item = itemByCode(id);
+  if(!item) return;
+  const u = userById(el('bWho').value);
+  const qty = parseInt(el('bQty').value, 10);
+  const until = el('bUntil').value;
+  const note = el('bNote').value.trim();
+  const av = availQty(item);
+  if(!u){ toast('Izberi registriranega uporabnika.'); return; }
+  if(!isAdmin() && currentUser && u.id !== currentUser.id){ toast('Tabornik si lahko izposodi samo zase.'); return; }
+  if(!qty || qty<1 || qty>av){ toast('Količina mora biti med 1 in ' + av + '.'); return; }
+  if(!until){ toast('Izberi datum vračila.'); return; }
+  const who = userDisplay(u);
+  const loan = { id: (crypto && crypto.randomUUID) ? crypto.randomUUID() : 'l_' + Date.now(), borrower:who, email:u.email, borrowerId:u.id, qty, from:todayISO(), until, note };
+  try{
+    const { error } = await sb.from('loans').insert(loanToDb(item, loan));
+    if(error) throw error;
+    item.loans.push(loan);
+    await insertLogEntry({ type:'borrow', code:item.id, name:item.name, borrower:who, email:u.email, borrowerId:u.id, qty, until });
+    closeModal();
+    toast('Izposojeno: ' + qty + ' × ' + item.name + ' → ' + who);
+    refreshCurrent(item.id);
+  }catch(e){
+    console.error(e);
+    toast('Izposoja ni uspela: ' + (e.message || e));
+  }
+}
+function openReturnModal(id){
+  const item = itemByCode(id);
+  if(!item || !item.loans.length){ toast('Ta predmet nima odprtih izposoj.'); return; }
+  let h = '<h3>Vračilo — ' + esc(item.name) + ' <span class="tag">' + esc(item.id) + '</span></h3>' +
+    (item.loans.length>1 ? '<div class="hint">Izberi, kdo vrača opremo, in vpiši, koliko kosov vrača.</div>' : '');
+  item.loans.forEach((l,idx)=>{
+    h += '<div class="loanrow' + (isOverdue(l)?' late':'') + '" style="margin-bottom:8px">' +
+      '<span class="who">' + whoHTML(l) + '</span>' +
+      '<span>' + l.qty + ' kos' + (l.qty===1?'':'ov') + '</span>' +
+      '<span class="' + (isOverdue(l)?'overdue':'') + '">do ' + fmtDate(l.until) + (isOverdue(l)?' ⚠ ZAMUDA':'') + '</span>' +
+      '<span class="loanctl">Vrne:' +
+        '<input id="rQty' + idx + '" type="number" min="1" max="' + l.qty + '" value="' + l.qty + '">' +
+        '<button class="btn btn-primary btn-sm" data-act="returnSave" data-id="' + esc(item.id) + '" data-idx="' + idx + '">↩ Vrni</button>' +
+      '</span></div>';
+  });
+  /* če je predmet del skupinske izposoje, ponudi vračilo cele skupine naenkrat */
+  const gids = [...new Set(item.loans.filter(l=>l.gid).map(l=>l.gid))];
+  for(const gid of gids){
+    const sib = loansByGid(gid);
+    const itemCount = new Set(sib.map(s=>s.item.id)).size;
+    if(itemCount < 2) continue;
+    const totalQty = sib.reduce((s,x)=>s+x.loan.qty, 0);
+    h += '<div class="loanrow" style="margin-bottom:8px;border-color:var(--ember);background:#FBF1E8;flex-direction:column;align-items:stretch;gap:8px">' +
+      '<div><b>Skupinska izposoja</b> — ' + whoHTML(sib[0].loan) + ': ' + itemCount + ' predmetov, ' + totalQty + ' kosov</div>' +
+      '<button class="btn btn-accent btn-sm" style="align-self:flex-start" data-act="returnGroup" data-gid="' + esc(gid) + '">↩ Vrni celotno skupino</button>' +
+    '</div>';
+  }
+  h += '<div class="actions"><button class="btn btn-ghost" data-act="modalClose">Zapri</button></div>';
+  openModal(h);
+}
+/* vse odprte izposoje z dano oznako skupine (par predmet + izposoja) */
+function loansByGid(gid){
+  const out = [];
+  for(const it of inventory) for(const l of (it.loans||[])) if(l.gid === gid) out.push({ item:it, loan:l });
+  return out;
+}
+async function submitReturn(id, idx){
+  const item = itemByCode(id);
+  if(!item || !item.loans[idx]) return;
+  const l = item.loans[idx];
+  const q = parseInt(el('rQty'+idx).value, 10);
+  if(!q || q<1 || q>l.qty){ toast('Količina mora biti med 1 in ' + l.qty + '.'); return; }
+  if(!isAdmin() && currentUser && l.borrowerId !== currentUser.id){ toast('Vrneš lahko samo svojo izposojo.'); return; }
+  try{
+    const oldQty = l.qty;
+    const who = l.borrower;
+    if(q === oldQty){
+      const { error } = await sb.from('loans').delete().eq('id', l.id);
+      if(error) throw error;
+      item.loans.splice(idx,1);
+    }else{
+      const newQty = oldQty - q;
+      const { error } = await sb.from('loans').update({ qty:newQty }).eq('id', l.id);
+      if(error) throw error;
+      l.qty = newQty;
+    }
+    await insertLogEntry({ type:'return', code:item.id, name:item.name, borrower:who, email:l.email, borrowerId:l.borrowerId, qty:q });
+    closeModal();
+    toast('Vrnjeno: ' + q + ' × ' + item.name + ' (' + who + ')');
+    refreshCurrent(item.id);
+  }catch(e){
+    console.error(e);
+    toast('Vračilo ni uspelo: ' + (e.message || e));
+  }
+}
+/* vrne vse predmete iste skupinske izposoje naenkrat; zapisi delijo isto
+   oznako skupine, zato so v dnevniku prikazani kot eno vračilo */
+async function returnGroup(gid){
+  const sib = loansByGid(gid);
+  if(!sib.length){ toast('Ta skupina nima odprtih izposoj.'); return; }
+  if(!isAdmin() && currentUser && sib.some(x => x.loan.borrowerId !== currentUser.id)){
+    toast('Vrneš lahko samo svojo skupinsko izposojo.');
+    return;
+  }
+  const rgid = 'R' + Date.now();
+  try{
+    for(const { item, loan } of sib){
+      await insertLogEntry({ type:'return', code:item.id, name:item.name, borrower:loan.borrower, email:loan.email, borrowerId:loan.borrowerId, qty:loan.qty, gid:rgid });
+    }
+    const ids = sib.map(x=>x.loan.id).filter(Boolean);
+    if(ids.length){
+      const { error } = await sb.from('loans').delete().in('id', ids);
+      if(error) throw error;
+    }
+    for(const it of inventory) it.loans = it.loans.filter(l=>l.gid !== gid);
+    const n = new Set(sib.map(s=>s.item.id)).size;
+    closeModal();
+    toast('Vrnjeno: ' + n + ' predmetov (' + esc(sib[0].loan.borrower) + ')');
+    refreshCurrent();
+  }catch(e){
+    console.error(e);
+    toast('Vračilo skupine ni uspelo: ' + (e.message || e));
+  }
+}
+
+/* ---------- SKUPINSKA IZPOSOJA (košarica) ----------
+   Uporabnik doda več predmetov, vpiše osebo in rok enkrat. Ob oddaji
+   vsak predmet dobi svojo izposojo z isto oznako skupine (gid), enako
+   pa velja za dnevniške zapise — tako je vse zabeleženo kot ena izposoja. */
+let cartQ = '';                          // iskalni niz v izbirniku predmetov
+function cartLine(code){ return cart.find(c=>c.code===code); }
+function cartItemCount(){ return cart.reduce((s,c)=>s+c.qty, 0); }
+
+function renderCart(m){
+  m.innerHTML =
+    '<h2 class="view-title">Izposoja</h2>' +
+    '<div class="view-sub">Dodaj več predmetov v košarico in jih izposodi naenkrat — vse se zabeleži kot ena izposoja na istega uporabnika z istim rokom.</div>' +
+    '<div class="cart-cols">' +
+      '<div class="cart-pick">' +
+        '<div class="toolrow"><input type="search" id="cartSearch" data-input="cartSearch" placeholder="Išči predmet za dodajanje …" value="' + esc(cartQ) + '"></div>' +
+        '<div class="cart-list" id="cartResults"></div>' +
+      '</div>' +
+      '<div class="cart-side">' +
+        '<div id="cartBasket"></div>' +
+        '<div class="field"><label>Tabornik (registriran uporabnik)</label>' +
+          '<select id="cWho"><option value="">— izberi uporabnika —</option>' + userOptions(currentUser?currentUser.id:'') + '</select></div>' +
+        '<div class="field"><label>Vrni do</label><input id="cUntil" type="date" value="' + plusDaysISO(14) + '">' +
+          '<div class="duechips">' +
+            '<button type="button" class="chip chip-sm" data-act="cartDue" data-days="7">+7 dni</button>' +
+            '<button type="button" class="chip chip-sm" data-act="cartDue" data-days="14">+14 dni</button>' +
+            '<button type="button" class="chip chip-sm" data-act="cartDue" data-days="30">+30 dni</button>' +
+          '</div></div>' +
+        '<div class="field"><label>Opomba (neobvezno)</label><input id="cNote"></div>' +
+        '<button class="btn btn-accent btn-block" data-act="cartSubmit">↗ Izposodi vse</button>' +
+      '</div>' +
+    '</div>';
+  renderCartResults();
+  renderCartBasket();
+}
+function renderCartResults(){
+  const host = el('cartResults');
+  if(!host) return;
+  const q = cartQ.trim().toLowerCase();
+  const avail = inventory.filter(i => availQty(i) > 0 &&
+    (!q || i.name.toLowerCase().includes(q) || String(i.id).toLowerCase().includes(q)));
+  if(!avail.length){
+    host.innerHTML = '<div class="empty">' + (q ? 'Noben predmet ne ustreza iskanju.' : 'Trenutno ni razpoložljivih predmetov.') + '</div>';
+    return;
+  }
+  let h = '';
+  for(const i of avail.slice(0, 80)){
+    const inB = !!cartLine(i.id);
+    const cat = catById(i.cat);
+    h += '<div class="cart-pickrow' + (inB?' inbasket':'') + '">' +
+      '<span class="nm"><span class="tag">' + esc(i.id) + '</span> ' + esc(i.name) +
+        (cat?' <small style="color:var(--ink-soft)">· ' + esc(cat.name) + '</small>':'') + '</span>' +
+      '<span class="av">' + availQty(i) + ' na voljo</span>' +
+      (inB
+        ? '<button class="btn btn-ghost btn-sm" disabled>V košarici</button>'
+        : '<button class="btn btn-primary btn-sm" data-act="cartAdd" data-code="' + esc(i.id) + '">+ Dodaj</button>') +
+    '</div>';
+  }
+  host.innerHTML = h;
+}
+function renderCartBasket(){
+  const host = el('cartBasket');
+  if(!host) return;
+  if(!cart.length){
+    host.innerHTML = '<div class="cart-basket"><div class="cart-sum">Košarica je prazna. Dodaj predmete z leve strani.</div></div>';
+    if(activeNav==='cart') buildSidebar();
+    return;
+  }
+  let h = '<div class="cart-basket">';
+  for(const c of cart){
+    const item = itemByCode(c.code);
+    if(!item) continue;
+    const mx = availQty(item);
+    h += '<div class="cart-row">' +
+      '<span class="nm"><span class="tag">' + esc(item.id) + '</span> ' + esc(item.name) +
+        '<small>' + mx + ' na voljo</small></span>' +
+      '<span class="qtystep">' +
+        '<button type="button" data-act="cartStep" data-code="' + esc(item.id) + '" data-d="-1" aria-label="Manj">−</button>' +
+        '<input type="number" min="1" max="' + mx + '" value="' + c.qty + '" data-input="cartQty" data-code="' + esc(item.id) + '">' +
+        '<button type="button" data-act="cartStep" data-code="' + esc(item.id) + '" data-d="1" aria-label="Več">+</button>' +
+      '</span>' +
+      '<button class="rm" data-act="cartRemove" data-code="' + esc(item.id) + '" aria-label="Odstrani">×</button>' +
+    '</div>';
+  }
+  h += '<div class="cart-sum">Skupaj: ' + cart.length + ' predmetov, ' + cartItemCount() + ' kosov</div></div>';
+  host.innerHTML = h;
+  if(activeNav==='cart') buildSidebar();
+}
+function cartAdd(code){
+  const item = itemByCode(code);
+  if(!item){ toast('Predmet ne obstaja.'); return; }
+  if(availQty(item) <= 0){ toast('Ni razpoložljivih kosov.'); return; }
+  if(cartLine(code)){ return; }
+  cart.push({ code:item.id, qty:1 });
+  renderCartBasket();
+  renderCartResults();
+}
+function cartRemove(code){
+  cart = cart.filter(c=>c.code!==code);
+  renderCartBasket();
+  renderCartResults();
+}
+function cartStep(code, d){
+  const c = cartLine(code), item = itemByCode(code);
+  if(!c || !item) return;
+  c.qty = Math.max(1, Math.min(availQty(item), c.qty + d));
+  renderCartBasket();
+}
+function cartSetQty(code, val){           // ob tipkanju posodobi stanje brez ponovnega izrisa (fokus ostane)
+  const c = cartLine(code), item = itemByCode(code);
+  if(!c || !item) return;
+  let v = parseInt(val, 10);
+  if(isNaN(v)) return;
+  c.qty = Math.max(1, Math.min(availQty(item), v));
+}
+async function submitCartLoan(){
+  if(!cart.length){ toast('Košarica je prazna.'); return; }
+  const u = userById(el('cWho').value);
+  const until = el('cUntil').value;
+  const note = el('cNote').value.trim();
+  if(!u){ toast('Izberi registriranega uporabnika.'); el('cWho').focus(); return; }
+  if(!isAdmin() && currentUser && u.id !== currentUser.id){ toast('Tabornik si lahko izposodi samo zase.'); return; }
+  if(!until){ toast('Izberi datum vračila.'); return; }
+  for(const c of cart){
+    const item = itemByCode(c.code);
+    if(!item){ toast('Predmet ' + c.code + ' ne obstaja več.'); return; }
+    if(c.qty < 1 || c.qty > availQty(item)){
+      toast('Za ' + item.name + ' je na voljo le ' + availQty(item) + ' kosov.'); return;
+    }
+  }
+  const who = userDisplay(u);
+  const gid = 'L' + Date.now();
+  const loans = cart.map(c => {
+    const item = itemByCode(c.code);
+    return { item, loan:{ id:(crypto && crypto.randomUUID) ? crypto.randomUUID() : 'l_' + Date.now() + '_' + c.code, borrower:who, email:u.email, borrowerId:u.id, qty:c.qty, from:todayISO(), until, note, gid } };
+  });
+  try{
+    const { error } = await sb.from('loans').insert(loans.map(x=>loanToDb(x.item, x.loan)));
+    if(error) throw error;
+    for(const x of loans){
+      x.item.loans.push(x.loan);
+      await insertLogEntry({ type:'borrow', code:x.item.id, name:x.item.name, borrower:who, email:u.email, borrowerId:u.id, qty:x.loan.qty, until, gid });
+    }
+    const n = cart.length;
+    cart = [];
+    cartQ = '';
+    toast('Izposojeno: ' + n + ' predmetov → ' + who);
+    switchView('cart');
+  }catch(e){
+    console.error(e);
+    toast('Skupinska izposoja ni uspela: ' + (e.message || e));
+  }
+}
+
+/* =====================================================================
+   10. PREDMETI — dodajanje, urejanje, brisanje (admin)
+===================================================================== */
+function openItemModal(id, presetCat, presetSub){
+  if(!isAdmin()) return;
+  const item = id ? itemByCode(id) : null;
+  const cat = item ? item.cat : (presetCat || (categories[0] && categories[0].id) || '');
+  const catOpts = categories.map(c =>
+    '<option value="' + esc(c.id) + '"' + (c.id===cat?' selected':'') + '>' + esc(c.icon) + ' ' + esc(c.name) + '</option>').join('');
+  openModal(
+    '<h3>' + (item?'Uredi predmet':'Dodaj predmet') + '</h3>' +
+    '<div class="fieldrow">' +
+      '<div class="field"><label>Koda</label><input id="iCode" value="' + esc(item?item.id:'') + '" ' + (item?'disabled':'placeholder="npr. KUH-003"') + '></div>' +
+      '<div class="field"><label>Količina</label><input id="iQty" type="number" min="1" value="' + (item?item.qty:1) + '"></div>' +
+    '</div>' +
+    '<div class="field"><label>Ime predmeta</label><input id="iName" value="' + esc(item?item.name:'') + '"></div>' +
+    '<div class="fieldrow">' +
+      '<div class="field"><label>Kategorija</label><select id="iCat" data-change="itemCat">' + catOpts + '</select></div>' +
+      '<div class="field"><label>Podkategorija</label><select id="iSub"></select></div>' +
+    '</div>' +
+    '<div class="fieldrow">' +
+      '<div class="field"><label>Stanje</label><select id="iCond">' +
+        ['dobro','rabljeno','poškodovano'].map(s=>'<option' + (item&&item.condition===s?' selected':'') + '>' + s + '</option>').join('') +
+      '</select></div>' +
+    '</div>' +
+    '<div class="field"><label>Opomba</label><input id="iNote" value="' + esc(item?item.note:'') + '"></div>' +
+    '<div class="actions">' +
+      (item?'<button class="btn btn-danger" style="margin-right:auto" data-act="itemDel" data-id="' + esc(item.id) + '">Izbriši</button>':'') +
+      '<button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
+      '<button class="btn btn-primary" data-act="itemSave"' + (item?' data-id="' + esc(item.id) + '"':'') + '>Shrani</button>' +
+    '</div>');
+  fillSubcats(item ? item.subcat : presetSub);
+}
+function fillSubcats(selected){
+  const catSel = el('iCat');
+  const subSel = el('iSub');
+  if(!catSel || !subSel) return;
+  const c = catById(catSel.value);
+  subSel.innerHTML = (c?c.subcats:[]).map(s =>
+    '<option' + (s===selected?' selected':'') + '>' + esc(s) + '</option>').join('');
+}
+async function saveItem(id){
+  const code = id || el('iCode').value.trim().toUpperCase();
+  const name = el('iName').value.trim();
+  const qty  = parseInt(el('iQty').value, 10);
+  const cat  = el('iCat').value;
+  const sub  = el('iSub').value;
+  const cond = el('iCond').value;
+  const note = el('iNote').value.trim();
+  if(!code){ toast('Vpiši kodo predmeta.'); return; }
+  if(!id && !/^[0-9A-ZČŠŽĐĆ._\/-]{1,32}$/.test(code)){
+    toast('Koda lahko vsebuje le črke, številke in znake . _ - / (brez presledkov).'); return;
+  }
+  if(!name){ toast('Vpiši ime predmeta.'); return; }
+  if(!qty || qty<1){ toast('Količina mora biti vsaj 1.'); return; }
+  let item;
+  if(id){
+    item = itemByCode(id);
+    if(qty < borrowedQty(item)){ toast('Količina ne more biti manjša od trenutno izposojene (' + borrowedQty(item) + ').'); return; }
+    Object.assign(item, { name, qty, cat, subcat:sub, condition:cond, note });
+  } else {
+    if(itemByCode(code)){ toast('Koda ' + code + ' že obstaja.'); return; }
+    item = { id:code, name, cat, subcat:sub, qty, condition:cond, note, loans:[], custom:{} };
+    inventory.push(item);
+  }
+  try{
+    const { error } = await sb.from('items').upsert(itemToDb(item), { onConflict:'id' });
+    if(error) throw error;
+    closeModal();
+    toast('Predmet shranjen.');
+    refreshCurrent();
+  }catch(e){
+    console.error(e);
+    toast('Predmet ni bil shranjen: ' + (e.message || e));
+  }
+}
+function deleteItem(id){
+  const item = itemByCode(id);
+  if(!item) return;
+  if(borrowedQty(item)>0){ toast('Predmeta z odprtimi izposojami ni mogoče izbrisati.'); return; }
+  confirmDialog('Predmet »' + item.name + '« (' + item.id + ') bo trajno izbrisan iz inventarja.', async ()=>{
+    try{
+      await deleteDbRow('items', item.id);
+      inventory = inventory.filter(i=>i.id!==item.id);
+      closeModal();
+      toast('Predmet izbrisan.');
+      refreshCurrent();
+    }catch(e){
+      console.error(e);
+      toast('Brisanje predmeta ni uspelo: ' + (e.message || e));
+    }
+  });
+}
+
+/* =====================================================================
+   11. KOLEDAR — plavajoči gumb in mesečno okence
+===================================================================== */
+/* zbere vse dogodke po datumih: izposoje, roki vrnitve, zamude, datumski stolpci */
+function buildCalEvents(){
+  const map = {};
+  const add = (iso, ev) => { if(!iso) return; (map[iso] = map[iso] || []).push(ev); };
+  for(const i of inventory){
+    for(const l of (i.loans||[])){
+      add(l.from,  { type:'borrow', full:'Izposoja: ' + l.qty + ' × ' + i.name + ' (' + i.id + ') — ' + whoText(l) + ', vrnitev do ' + fmtDate(l.until), code:i.id });
+      add(l.until, { type:isOverdue(l)?'overdue':'due', full:'Rok vrnitve: ' + l.qty + ' × ' + i.name + ' (' + i.id + ') — ' + whoText(l) + (isOverdue(l)?' — ZAMUDA':''), code:i.id });
+    }
+    for(const f of catFields(i.cat)){       // vsak datumski stolpec se pojavi na koledarju
+      if(f.type !== 'date') continue;
+      const v = i.custom ? i.custom[f.id] : '';
+      if(v) add(v, { type:'popis', full:f.name + ': ' + i.name + ' (' + i.id + ')', code:i.id });
+    }
+  }
+  return map;
+}
+const EV_ORDER = { overdue:0, due:1, borrow:2, popis:3 };
+const EV_LABEL = { borrow:'Izposoja', due:'Vrnitev', overdue:'Zamuda', popis:'Popis' };
+
+function toggleCalPop(){
+  const p = el('calPop');
+  const on = p.classList.toggle('on');
+  if(on){ calSelDay = null; renderCalPop(); }
+}
+function closeCalPop(){ el('calPop').classList.remove('on'); }
+
+function renderCalPop(){
+  const now = new Date();
+  if(calY===null){ calY = now.getFullYear(); calM = now.getMonth(); }
+  const events = buildCalEvents();
+  const startDow = (new Date(calY, calM, 1).getDay() + 6) % 7;   // ponedeljek = 0
+  const daysInMonth = new Date(calY, calM+1, 0).getDate();
+  const tIso = todayISO();
+
+  let h = '';
+  /* levi panel z dogodki izbranega dne */
+  if(calSelDay){
+    const evs = (events[calSelDay] || []).slice()
+      .sort((a,b)=>(EV_ORDER[a.type]??9)-(EV_ORDER[b.type]??9));
+    h += '<div class="calpop-side">' +
+      '<div class="calpop-day-h"><b>' + fmtDate(calSelDay) + '</b>' +
+        '<button class="calpop-x" data-act="calDayClose" aria-label="Zapri dan">×</button></div>';
+    if(!evs.length){
+      h += '<div style="font-size:12.5px;color:var(--ink-soft)">Na ta dan ni dogodkov.</div>';
+    } else {
+      for(const e of evs){
+        h += '<div class="calpop-evt">' +
+          '<span class="cal-evt ev-' + e.type + '">' + EV_LABEL[e.type] + '</span>' +
+          '<span class="calpop-evt-t">' + esc(e.full) +
+            ' <a data-act="calItem" data-id="' + esc(e.code) + '">Predmet ›</a></span>' +
+        '</div>';
+      }
+    }
+    h += '</div>';
+  }
+
+  /* glavni del: glava z izbiro meseca/leta, mreža, legenda */
+  let mSel = '<select class="calsel" data-change="calMonth" aria-label="Mesec">';
+  MONTH_NAMES.forEach((m,i)=>{ mSel += '<option value="' + i + '"' + (i===calM?' selected':'') + '>' + m + '</option>'; });
+  mSel += '</select>';
+  let ySel = '<select class="calsel" data-change="calYear" aria-label="Leto">';
+  for(let y = now.getFullYear()-6; y <= now.getFullYear()+6; y++){
+    ySel += '<option value="' + y + '"' + (y===calY?' selected':'') + '>' + y + '</option>';
+  }
+  ySel += '</select>';
+
+  h += '<div class="calpop-main">' +
+    '<div class="calpop-head">' +
+      '<button class="calpop-x" data-act="calShift" data-d="-1" aria-label="Prejšnji mesec">‹</button>' +
+      mSel + ySel +
+      '<button class="calpop-x" data-act="calShift" data-d="1" aria-label="Naslednji mesec">›</button>' +
+      '<span style="flex:1"></span>' +
+      '<button class="btn btn-ghost btn-sm" data-act="calToday">Danes</button>' +
+      '<button class="calpop-x" data-act="calClose" aria-label="Zapri koledar">×</button>' +
+    '</div><div class="cal-grid">';
+  for(const d of DOW_NAMES) h += '<div class="cal-dow">' + d + '</div>';
+  for(let i=0;i<startDow;i++) h += '<div class="cal-day blank"></div>';
+  for(let d=1; d<=daysInMonth; d++){
+    const iso = calY + '-' + String(calM+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const evs = events[iso] || [];
+    const dow = (startDow + d - 1) % 7;
+    let cls = 'cal-day';
+    if(dow>=5) cls += ' wend';
+    if(iso===tIso) cls += ' today';
+    if(iso===calSelDay) cls += ' sel';
+    if(evs.length) cls += ' hasv';
+    h += '<div class="' + cls + '" data-act="calDay" data-iso="' + iso + '">' +
+      '<div class="cal-num">' + d + '</div><div class="cal-dots">';
+    evs.slice(0,3).forEach(e=>{ h += '<span class="cal-dot dot-' + e.type + '"></span>'; });
+    if(evs.length>3) h += '<span class="cal-more">+' + (evs.length-3) + '</span>';
+    h += '</div></div>';
+  }
+  h += '</div>' +
+    '<div class="callegend">' +
+      '<span><i class="dot-borrow"></i>izposoja</span>' +
+      '<span><i class="dot-due"></i>rok vrnitve</span>' +
+      '<span><i class="dot-overdue"></i>zamuda</span>' +
+      '<span><i class="dot-popis"></i>popis</span>' +
+    '</div></div>';
+
+  el('calPop').innerHTML = h;
+}
+function selectCalDay(iso){
+  calSelDay = (calSelDay===iso) ? null : iso;
+  renderCalPop();
+}
+function calShift(d){
+  calM += d;
+  if(calM<0){ calM = 11; calY--; }
+  if(calM>11){ calM = 0; calY++; }
+  calSelDay = null;
+  renderCalPop();
+}
+function calToday(){
+  const now = new Date();
+  calY = now.getFullYear(); calM = now.getMonth(); calSelDay = null;
+  renderCalPop();
+}
+/* rdeča značka na gumbu koledarja = število zamujenih izposoj */
+function updateFab(){
+  const n = overdueLoanCount();
+  const b = el('fabBadge');
+  if(!b) return;
+  b.hidden = (n===0);
+  b.textContent = n;
+}
+
+/* =====================================================================
+   12. DNEVNIK, EXCEL IZVOZ, QR NALEPKE, VARNOSTNA KOPIJA (admin)
+===================================================================== */
+function logFiltered(){
+  const q = logFilter.q.trim().toLowerCase();
+  return log.filter(e=>{
+    if(logFilter.type && e.type!==logFilter.type) return false;
+    if(q && !(String(e.name).toLowerCase().includes(q) ||
+              String(e.code).toLowerCase().includes(q) ||
+              String(e.borrower).toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+function renderLog(m){
+  const rows = logFiltered();
+  let h = '<h2 class="view-title">Dnevnik</h2>' +
+    '<div class="view-sub">Zabeležene so samo izposoje in vračila opreme.</div>' +
+    '<div class="toolrow">' +
+      '<select class="calsel" data-change="logType" aria-label="Vrsta dogodka">' +
+        '<option value=""' + (!logFilter.type?' selected':'') + '>Vsi dogodki</option>' +
+        '<option value="borrow"' + (logFilter.type==='borrow'?' selected':'') + '>Samo izposoje</option>' +
+        '<option value="return"' + (logFilter.type==='return'?' selected':'') + '>Samo vračila</option>' +
+      '</select>' +
+      '<input type="search" data-input="logSearch" placeholder="Išči po predmetu, kodi ali osebi …" value="' + esc(logFilter.q) + '">' +
+      '<span class="result-cnt">' + rows.length + ' / ' + log.length + '</span>' +
+      (log.length ? '<button class="btn btn-danger btn-sm" data-act="logClear">Počisti dnevnik</button>' : '') +
+    '</div><div id="tableHost">' + logTableHTML(rows) + '</div>';
+  m.innerHTML = h;
+}
+function logTableHTML(rows){
+  if(!log.length)  return '<div class="tablewrap"><div class="empty">Dnevnik je prazen.</div></div>';
+  if(!rows.length) return '<div class="tablewrap"><div class="empty">Noben zapis ne ustreza filtru.</div></div>';
+  /* zapise iste skupinske izposoje (isti gid) združimo v en prikaz: oseba, rok
+     in čas enkrat, predmeti pa našteti skupaj. Vračila in posamične izposoje
+     ostanejo svoje vrstice. */
+  const units = [];
+  const byGid = {};
+  for(const e of rows){
+    if(e.gid){                           // skupinska izposoja ali skupinsko vračilo
+      const key = e.type + '|' + e.gid;
+      if(byGid[key] === undefined){
+        byGid[key] = units.length;
+        units.push({ group:true, type:e.type, time:e.time, borrower:e.borrower, email:e.email, until:e.until,
+          items:[{ name:e.name, code:e.code, qty:e.qty }] });
+      } else {
+        units[byGid[key]].items.push({ name:e.name, code:e.code, qty:e.qty });
+      }
+    } else {
+      units.push({ group:false, entry:e });
+    }
+  }
+  let h = '<div class="tablewrap"><table><thead><tr>' +
+    '<th>Čas</th><th>Dogodek</th><th>Predmet</th><th>Koda</th><th>Oseba</th><th>Kol.</th><th>Vrni do</th>' +
+    '</tr></thead><tbody>';
+  for(const u of units){
+    if(u.group && u.items.length > 1){
+      const total = u.items.reduce((s,it)=>s+it.qty, 0);
+      const names = u.items.map(it=>esc(it.name)).join('<br>');
+      const codes = u.items.map(it=>'<span class="tag">' + esc(it.code) + '</span>').join('<br>');
+      const qtys  = u.items.map(it=>it.qty).join('<br>');
+      const isB = u.type==='borrow';
+      h += '<tr class="log-grouprow">' +
+        '<td style="white-space:nowrap;font-size:13px;vertical-align:top">' + esc(u.time) + '</td>' +
+        '<td style="vertical-align:top">' +
+          (isB ? '<span class="log-borrow">↗ Izposoja</span>' : '<span class="log-return">↩ Vračilo</span>') +
+          ' <span class="more" title="Skupinsk' + (isB?'a izposoja':'o vračilo') + ': ' + u.items.length + ' predmetov, ' + total + ' kosov">skupina</span></td>' +
+        '<td style="vertical-align:top;line-height:1.9">' + names + '</td>' +
+        '<td style="vertical-align:top;line-height:1.9">' + codes + '</td>' +
+        '<td style="vertical-align:top"><b>' + esc(u.borrower) + '</b>' +
+          (u.email?'<br><small style="color:var(--ink-soft)">' + esc(u.email) + '</small>':'') +
+          '<br><small style="color:var(--ink-soft)">' + u.items.length + ' predmetov · ' + total + ' kosov</small></td>' +
+        '<td class="qtycell" style="vertical-align:top;line-height:1.9">' + qtys + '</td>' +
+        '<td style="vertical-align:top">' + (isB ? fmtDate(u.until) : '—') + '</td>' +
+      '</tr>';
+    } else {
+      const e = u.group ? { type:u.type, time:u.time, name:u.items[0].name, code:u.items[0].code,
+                            borrower:u.borrower, email:u.email, qty:u.items[0].qty, until:u.until } : u.entry;
+      h += '<tr>' +
+        '<td style="white-space:nowrap;font-size:13px">' + esc(e.time) + '</td>' +
+        '<td>' + (e.type==='borrow'?'<span class="log-borrow">↗ Izposoja</span>':'<span class="log-return">↩ Vračilo</span>') + '</td>' +
+        '<td>' + esc(e.name) + '</td>' +
+        '<td><span class="tag">' + esc(e.code) + '</span></td>' +
+        '<td>' + whoHTML(e) + '</td>' +
+        '<td class="qtycell">' + e.qty + '</td>' +
+        '<td>' + (e.type==='borrow'?fmtDate(e.until):'—') + '</td>' +
+      '</tr>';
+    }
+  }
+  return h + '</tbody></table></div>';
+}
+function updateLogTable(){
+  const host = el('tableHost');
+  if(host) host.innerHTML = logTableHTML(logFiltered());
+}
+function clearLog(){
+  confirmDialog('Celoten dnevnik izposoj in vračil bo izbrisan. Tega ni mogoče razveljaviti.', async ()=>{
+    try{
+      if(supabaseReady()){
+        const { error } = await sb.from('log_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if(error) throw error;
+      }
+      log = [];
+      logFilter = { type:'', q:'' };
+      switchView('log');
+      toast('Dnevnik počiščen.');
+    }catch(e){
+      console.error(e);
+      toast('Dnevnika ni bilo mogoče počistiti: ' + (e.message || e));
+    }
+  }, 'Počisti');
+}
+
+/* ---------- Excel izvoz — struktura datoteke je nespremenjena ---------- */
+function renderExcel(m){
+  m.innerHTML =
+    '<h2 class="view-title">Excel izvoz</h2>' +
+    '<div class="view-sub">Datoteka vsebuje skupni pregled, list za vsako kategorijo, trenutne izposoje in dnevnik.</div>' +
+    '<button class="btn btn-primary" data-act="excel">⬇ Prenesi Excel (.xlsx)</button>';
+}
+function sheetName(s){
+  return s.replace(/[\\/?*\[\]:]/g,'').slice(0,31) || 'List';
+}
+function exportExcel(){
+  if(typeof XLSX === 'undefined'){ toast('Knjižnica za Excel ni naložena (potrebna je internetna povezava).'); return; }
+  const wb = XLSX.utils.book_new();
+  const rowOf = i => {
+    const c = catById(i.cat);
+    const r = {
+      'Koda':i.id, 'Predmet':i.name,
+      'Kategorija':c?c.name:i.cat, 'Podkategorija':i.subcat||'',
+      'Skupaj':i.qty, 'Na voljo':availQty(i), 'Izposojeno':borrowedQty(i),
+      'Status':itemStatus(i).txt, 'Stanje':i.condition||'', 'Opomba':i.note||''
+    };
+    for(const f of catFields(i.cat)){
+      const v = customVal(i, f);
+      if(f.type==='multiselect')      r[f.name] = (v||[]).join('; ');
+      else if(f.type==='checkbox')    r[f.name] = v ? 'DA' : '';
+      else                            r[f.name] = (v !== undefined && v !== null) ? String(v) : '';
+    }
+    return r;
+  };
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(inventory.map(rowOf)), 'Vsi predmeti');
+  for(const c of categories){
+    const items = inventory.filter(i=>i.cat===c.id);
+    if(items.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(items.map(rowOf)), sheetName(c.name));
+  }
+  const loans = [];
+  for(const i of inventory){
+    for(const l of i.loans){
+      loans.push({ 'Koda':i.id, 'Predmet':i.name, 'Izposojeno pri':l.borrower, 'E-mail':l.email||'', 'Količina':l.qty,
+        'Od':l.from, 'Vrni do':l.until, 'Zamuda':isOverdue(l)?'DA':'', 'Opomba':l.note||'' });
+    }
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(loans.length?loans:[{'Info':'Ni odprtih izposoj'}]), 'Trenutne izposoje');
+  const logRows = log.map(e => ({
+    'Čas':e.time, 'Dogodek':e.type==='borrow'?'Izposoja':'Vračilo',
+    'Predmet':e.name, 'Koda':e.code, 'Oseba':e.borrower, 'E-mail':e.email||'', 'Količina':e.qty,
+    'Vrni do':e.type==='borrow'?(e.until||''):''
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(logRows.length?logRows:[{'Info':'Dnevnik je prazen'}]), 'Dnevnik');
+  const userRows = users.map(u => ({
+    'Ime':u.firstName||'', 'Priimek':u.lastName||'', 'E-mail':u.email||'',
+    'Vloga':u.role==='admin'?'Gospodar opreme':'Tabornik', 'Uporabniško ime':u.username||''
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(userRows.length?userRows:[{'Info':'Ni uporabnikov'}]), 'Uporabniki');
+  XLSX.writeFile(wb, 'RMT_inventura_' + todayISO() + '.xlsx');
+  toast('Excel datoteka prenesena.');
+}
+
+/* ---------- QR nalepke ---------- */
+function renderQR(m){
+  let h = '<h2 class="view-title">QR nalepke</h2>' +
+    '<div class="view-sub">Označi predmete in natisni nalepke. Vsaka vsebuje QR kodo, kodo predmeta, ime, kategorijo in podkategorijo.</div>' +
+    '<div class="toolrow">' +
+      '<button class="btn btn-ghost btn-sm" data-act="qrAll" data-on="1">Označi vse</button>' +
+      '<button class="btn btn-ghost btn-sm" data-act="qrAll" data-on="0">Odznači vse</button>' +
+      '<button class="btn btn-primary" data-act="qrPrint">🖨 Natisni izbrane</button>' +
+    '</div>';
+  for(const c of categories){
+    const items = inventory.filter(i=>i.cat===c.id);
+    if(!items.length) continue;
+    h += '<div class="qrcat-h">' + esc(c.icon) + ' ' + esc(c.name) + '</div><div class="qrgrid">';
+    for(const i of items){
+      h += '<label class="qrpick"><input type="checkbox" class="qrchk" value="' + esc(i.id) + '">' +
+        '<span><span class="tag">' + esc(i.id) + '</span><br>' + esc(i.name) + '</span></label>';
+    }
+    h += '</div>';
+  }
+  m.innerHTML = h;
+}
+function qrSelectAll(on){
+  document.querySelectorAll('.qrchk').forEach(c=>c.checked=on);
+}
+/* tisk v novem oknu; podatki vstavljeni izključno prek textContent (varno pred XSS) */
+function printLabels(){
+  const codes = Array.from(document.querySelectorAll('.qrchk:checked')).map(c=>c.value);
+  if(!codes.length){ toast('Označi vsaj en predmet.'); return; }
+  const items = codes.map(itemByCode).filter(Boolean).map(i=>{
+    const c = catById(i.cat);
+    return { id:i.id, name:i.name, cat:(c?c.icon+' '+c.name:''), sub:i.subcat||'' };
+  });
+  const w = window.open('', '_blank');
+  if(!w){ toast('Brskalnik je blokiral novo okno.'); return; }
+  w.document.write('<!DOCTYPE html><html lang="sl"><head><meta charset="UTF-8"><title>QR nalepke — RMT Inventura</title>' +
+    '<scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/scr' + 'ipt>' +
+    '<style>' +
+    'body{font-family:Arial,sans-serif;margin:14px;display:flex;flex-wrap:wrap;gap:8px}' +
+    '.lbl{border:1.5px dashed #20402F;border-radius:6px;padding:8px;width:182px;page-break-inside:avoid;display:flex;gap:8px;align-items:center}' +
+    '.lbl .qr{flex-shrink:0}' +
+    '.lbl .tx{font-size:10.5px;line-height:1.35}' +
+    '.lbl .code{font-family:monospace;font-weight:bold;font-size:12px}' +
+    '.lbl .nm{font-weight:bold;font-size:11.5px;margin:2px 0}' +
+    '@media print{body{margin:4mm}}' +
+    '</style></head><body></body></html>');
+  w.document.close();
+  w.addEventListener('load', ()=>{
+    for(const it of items){
+      const d = w.document.createElement('div');
+      d.className = 'lbl';
+      const qr = w.document.createElement('div');
+      qr.className = 'qr';
+      const tx = w.document.createElement('div');
+      tx.className = 'tx';
+      const codeEl = w.document.createElement('div'); codeEl.className='code'; codeEl.textContent = it.id;
+      const nmEl = w.document.createElement('div'); nmEl.className='nm'; nmEl.textContent = it.name;
+      const catEl = w.document.createElement('div'); catEl.textContent = it.cat + (it.sub?' › '+it.sub:'');
+      tx.appendChild(codeEl); tx.appendChild(nmEl); tx.appendChild(catEl);
+      d.appendChild(qr); d.appendChild(tx);
+      w.document.body.appendChild(d);
+      try{ new w.QRCode(qr, { text: it.id, width: 64, height: 64 }); }
+      catch(e){ qr.textContent = '[QR]'; }
+    }
+    setTimeout(()=>w.print(), 400);
+  });
+}
+
+/* ---------- varnostna kopija (JSON izvoz/obnova) ---------- */
+function renderBackup(m){
+  const total = inventory.reduce((s,i)=>s+i.qty,0);
+  m.innerHTML =
+    '<h2 class="view-title">Varnostna kopija</h2>' +
+    '<div class="view-sub">Podatki aplikacije živijo v tem brskalniku (localStorage). Redno shrani kopijo na varno mesto — Google Drive, USB ključek ali mapo rodu.</div>' +
+    '<div class="stats">' +
+      '<div class="stat"><b>' + categories.length + '</b><span>Kategorij</span></div>' +
+      '<div class="stat"><b>' + inventory.length + '</b><span>Predmetov</span></div>' +
+      '<div class="stat"><b>' + total + '</b><span>Vseh kosov</span></div>' +
+      '<div class="stat"><b>' + log.length + '</b><span>Zapisov dnevnika</span></div>' +
+    '</div>' +
+    '<div class="itemcard" style="max-width:560px;margin-bottom:14px">' +
+      '<h3 style="margin-top:0">⬇ Izvoz kopije</h3>' +
+      '<div class="sub">Prenese datoteko .json z vsemi kategorijami, stolpci, predmeti, izposojami in dnevnikom. Datoteka pristane v mapi Prenosi.</div>' +
+      '<button class="btn btn-primary" style="margin-top:10px" data-act="backupExport">💾 Prenesi varnostno kopijo (.json)</button>' +
+    '</div>' +
+    '<div class="itemcard" style="max-width:560px">' +
+      '<h3 style="margin-top:0">⬆ Obnova iz kopije</h3>' +
+      '<div class="sub"><span class="overdue">Pozor:</span> obnova zamenja vse trenutne podatke s podatki iz datoteke.</div>' +
+      '<input type="file" id="importFile" accept=".json,application/json" style="display:none" data-change="importFile">' +
+      '<button class="btn btn-ghost" style="margin-top:10px" data-act="backupPick">📂 Izberi datoteko .json</button>' +
+    '</div>';
+}
+async function restoreBackupToSupabase(d){
+  if(!isAdmin()) throw new Error('Obnovo kopije lahko izvede samo gospodar opreme.');
+  const newCategories = d.categories || [];
+  const newInventory = d.inventory || [];
+  const newLog = Array.isArray(d.log) ? d.log : [];
+
+  const delLoans = await sb.from('loans').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if(delLoans.error) throw delLoans.error;
+  const delLogs = await sb.from('log_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if(delLogs.error) throw delLogs.error;
+  const delItems = await sb.from('items').delete().neq('id', '__never__');
+  if(delItems.error) throw delItems.error;
+  const delCats = await sb.from('categories').delete().neq('id', '__never__');
+  if(delCats.error) throw delCats.error;
+
+  if(newCategories.length){
+    const r = await sb.from('categories').insert(newCategories.map(categoryToDb));
+    if(r.error) throw r.error;
+  }
+  if(newInventory.length){
+    const r = await sb.from('items').insert(newInventory.map(itemToDb));
+    if(r.error) throw r.error;
+  }
+  const loanRows = [];
+  for(const item of newInventory){
+    for(const loan of (item.loans || [])) loanRows.push(loanToDb(item, loan));
+  }
+  if(loanRows.length){
+    const r = await sb.from('loans').insert(loanRows);
+    if(r.error) throw r.error;
+  }
+  if(newLog.length){
+    const r = await sb.from('log_entries').insert(newLog.map(logToDb));
+    if(r.error) throw r.error;
+  }
+  await loadData();
+}
+
+function exportJSON(){
+  const data = {
+    app: 'RMT Inventura',
+    version: 2,
+    exported: new Date().toISOString(),
+    categories, inventory, log, users
+  };
+  const json = JSON.stringify(data, null, 2);
+  try{
+    const blob = new Blob([json], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'RMT_inventura_kopija_' + todayISO() + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    toast('Varnostna kopija prenesena.');
+  }catch(e){
+    console.error(e);
+    toast('Prenos ni uspel.');
+  }
+}
+function handleImportFile(input){
+  const file = input.files && input.files[0];
+  input.value = '';                       // omogoči ponovno izbiro iste datoteke
+  if(!file) return;
+  importJSONFile(file);
+}
+function importJSONFile(file){
+  const reader = new FileReader();
+  reader.onerror = ()=>toast('Datoteke ni bilo mogoče prebrati.');
+  reader.onload = ()=>{
+    let d;
+    try{ d = JSON.parse(reader.result); }
+    catch(e){ toast('To ni veljavna JSON datoteka.'); return; }
+    if(!d || !Array.isArray(d.categories) || !Array.isArray(d.inventory)){
+      toast('Datoteka ni varnostna kopija RMT Inventure (manjkajo kategorije ali inventar).');
+      return;
+    }
+    if(d.inventory.some(i => !i || typeof i.id !== 'string' || typeof i.name !== 'string')){
+      toast('Datoteka je poškodovana: predmeti nimajo kode ali imena.');
+      return;
+    }
+    const newLog = Array.isArray(d.log) ? d.log : [];
+    const newUsers = Array.isArray(d.users) ? d.users : null;
+    confirmDialog(
+      'Trenutni podatki (' + inventory.length + ' predmetov, ' + categories.length + ' kategorij) bodo zamenjani s podatki iz kopije' +
+      (d.exported ? ' z dne ' + fmtDate(String(d.exported).slice(0,10)) : '') +
+      ' (' + d.inventory.length + ' predmetov, ' + d.categories.length + ' kategorij).',
+      async ()=>{
+        try{
+          if(supabaseReady()){
+            await restoreBackupToSupabase(d);
+          }else{
+            categories = d.categories;
+            inventory  = d.inventory;
+            log        = newLog;
+            if(newUsers) users = newUsers;
+            migrateData();
+            await saveData();
+          }
+          switchView('backup');
+          toast('Podatki obnovljeni iz varnostne kopije.');
+        }catch(e){
+          console.error(e);
+          toast('Obnova ni uspela: ' + (e.message || e));
+        }
+      }, 'Obnovi');
+  };
+  reader.readAsText(file);
+}
+
+/* =====================================================================
+   13. KATEGORIJE IN PRILAGODLJIVI STOLPCI (admin)
+===================================================================== */
+function renderUsers(m){
+  let h = '<h2 class="view-title">Uporabniki</h2>' +
+    '<div class="view-sub">Uporabniki prihajajo iz Supabase Auth/profiles. Novi taborniki se registrirajo na prijavnem zaslonu; gospodar opreme lahko tukaj spremeni vlogo.</div>' +
+    '<div class="tablewrap"><table><thead><tr>' +
+      '<th>Ime</th><th>Priimek</th><th>E-mail</th><th>Vloga</th>' +
+    '</tr></thead><tbody>';
+  for(const u of sortedUsers()){
+    const me = currentUser && u.id===currentUser.id;
+    h += '<tr>' +
+      '<td>' + esc(u.firstName||'') + '</td>' +
+      '<td>' + esc(u.lastName||'') + '</td>' +
+      '<td>' + esc(u.email||'') + '</td>' +
+      '<td><select class="tentctl" data-change="userRole" data-id="' + esc(u.id) + '"' + (me?' title="To si ti"':'') + '>' +
+        '<option value="user"' + (u.role==='user'?' selected':'') + '>Tabornik</option>' +
+        '<option value="admin"' + (u.role==='admin'?' selected':'') + '>Gospodar opreme</option>' +
+      '</select>' + (me?' <span class="more" title="To si ti">jaz</span>':'') + '</td>' +
+      '</tr>';
+  }
+  h += '</tbody></table></div>';
+  m.innerHTML = h;
+}
+function openUserModal(){
+  toast('Novi uporabnik naj se registrira na prijavnem zaslonu. Vlogo mu nato nastaviš tukaj.');
+}
+function saveUser(){
+  toast('Novi uporabnik naj se registrira na prijavnem zaslonu.');
+}
+function deleteUser(id){
+  toast('Brisanje Supabase Auth uporabnika iz javnega brskalnika ni podprto. Profil lahko urejaš v Supabase.');
+}
+async function setUserRole(id, role){
+  if(!isAdmin()) return;
+  const u = userById(id);
+  if(!u) return;
+  if(u.role==='admin' && role!=='admin' && users.filter(x=>x.role==='admin').length<=1){
+    toast('Vsaj en gospodar opreme mora ostati.');
+    renderUsers(el('main'));
+    return;
+  }
+  try{
+    const { error } = await sb.from('profiles').update({ role }).eq('id', id);
+    if(error) throw error;
+    u.role = role;
+    if(currentUser && currentUser.id===id) currentUser.role = role;
+    toast('Vloga shranjena.');
+    buildSidebar();
+    renderUsers(el('main'));
+  }catch(e){
+    console.error(e);
+    toast('Vloge ni bilo mogoče shraniti: ' + (e.message || e));
+  }
+}
+
+/* =====================================================================
+   14. KATEGORIJE IN PRILAGODLJIVI STOLPCI (admin)
+===================================================================== */
+function renderCats(m){
+  let h = '<h2 class="view-title">Kategorije</h2>' +
+    '<div class="view-sub">Uredi ime, ikono in podkategorije, nastavi stolpce tabele ali odstrani kategorijo.</div>' +
+    '<div class="toolrow"><button class="btn btn-primary" data-act="catNew">+ Nova kategorija</button></div>';
+  for(const c of categories){
+    const cnt = inventory.filter(i=>i.cat===c.id).length;
+    const cid = ' data-id="' + esc(c.id) + '"';
+    h += '<div class="itemcard" style="margin-bottom:14px">' +
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+        '<h3 style="margin:0">' + esc(c.icon) + ' ' + esc(c.name) + '</h3>' +
+        '<span class="sub" style="margin:0">' + cnt + ' predmetov</span>' +
+        '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button class="btn btn-ghost btn-sm" data-act="catEdit"' + cid + '>✎ Uredi</button>' +
+          '<button class="btn btn-ghost btn-sm" data-act="catFields"' + cid + '>⚙ Stolpci</button>' +
+          '<button class="btn btn-danger btn-sm" data-act="catDel"' + cid + '>Izbriši</button>' +
+        '</span>' +
+      '</div>';
+    if((c.subcats||[]).length){
+      h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">';
+      for(const s of c.subcats){
+        h += '<span class="status st-ok">' + esc(s) + '</span>';
+      }
+      h += '</div>';
+    }
+    const flds = c.fields || [];
+    if(flds.length){
+      h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center">' +
+        '<span style="font-size:12px;color:var(--ink-soft);letter-spacing:.05em;text-transform:uppercase">Stolpci:</span>';
+      for(const f of flds){
+        const t = FIELD_TYPES.find(x=>x.id===f.type);
+        h += '<span class="tag" title="' + esc(t?t.label:f.type) + '">' + esc(f.name) + '</span>';
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+  m.innerHTML = h;
+}
+function setCatIcon(e){
+  const i = el('cIcon');
+  if(i) i.value = e;
+}
+function emojiRowHTML(){
+  let h = '<div class="emojirow">';
+  for(const e of CAT_EMOJIS) h += '<button type="button" class="emojibtn" data-act="emoji" data-e="' + e + '">' + e + '</button>';
+  return h + '</div>';
+}
+
+/* ---------- urejevalnik stolpcev (skupen za novo in obstoječo kategorijo) ---------- */
+function fieldEditorHTML(){
+  return '<div class="field" style="margin-top:4px"><label>Stolpci tabele</label>' +
+    '<div class="typehelp">Vsak stolpec ima ime in tip podatka: <b>besedilo</b>, <b>število</b>, <b>datum</b> (ročni vpis, viden na koledarju), ' +
+    '<b>kljukica</b>, <b>spustni seznam</b> (ena izbira) ali <b>več izbir</b>. Pri seznamih možnosti loči s podpičjem ( ; ); ' +
+    'možnost »OK« samodejno izključuje vse druge. Vsaki možnosti lahko spodaj določiš barvo, s katero bo označena v tabeli in na kartici.</div>' +
+    '<div id="fieldRows"></div>' +
+    '<button type="button" class="btn btn-ghost btn-sm" data-act="fieldAdd">+ Dodaj stolpec</button></div>';
+}
+/* razčleni trenutni vnos možnosti (med tipkanjem še neshranjen) */
+function draftOpts(f){
+  const raw = (f._opts !== undefined) ? f._opts : (f.options||[]).join('; ');
+  return raw.split(';').map(s=>s.trim()).filter(Boolean);
+}
+/* vrstice z barvno paleto za vsako možnost spustnega seznama */
+function colorRowsHTML(f, idx){
+  const opts = draftOpts(f);
+  if(!opts.length) return '';
+  const cur = f._colors || f.colors || {};
+  let h = '<div class="copt-lbl">Barve možnosti (neobvezno)</div>';
+  for(const o of opts){
+    h += '<div class="copt"><span class="copt-name">' + esc(o) + '</span>' +
+      '<button type="button" class="swatch swatch-none' + (!cur[o]?' sel':'') + '" data-act="fieldColor" data-idx="' + idx + '" data-opt="' + esc(o) + '" data-c="" title="Brez barve">∅</button>';
+    for(const pc of OPT_COLORS){
+      h += '<button type="button" class="swatch' + (cur[o]===pc.c?' sel':'') + '" style="background:' + pc.c + '"' +
+        ' data-act="fieldColor" data-idx="' + idx + '" data-opt="' + esc(o) + '" data-c="' + pc.c + '" title="' + pc.n + '"></button>';
+    }
+    h += '</div>';
+  }
+  return h;
+}
+function renderFieldRows(){
+  const host = el('fieldRows');
+  if(!host) return;
+  let h = '';
+  draftFields.forEach((f, i)=>{
+    const needOpts = (f.type==='select' || f.type==='multiselect');
+    h += '<div class="frow">' +
+      '<div class="frow-top">' +
+        '<input type="text" class="frow-name" placeholder="Ime stolpca" value="' + esc(f.name) + '" data-input="fieldName" data-idx="' + i + '">' +
+        '<select class="frow-type" data-change="fieldType" data-idx="' + i + '">' +
+          FIELD_TYPES.map(t=>'<option value="' + t.id + '"' + (f.type===t.id?' selected':'') + '>' + t.label + '</option>').join('') +
+        '</select>' +
+        '<span class="frow-btns">' +
+          '<button type="button" data-act="fieldUp" data-idx="' + i + '" title="Premakni gor" aria-label="Premakni gor"' + (i===0?' disabled':'') + '>↑</button>' +
+          '<button type="button" data-act="fieldDown" data-idx="' + i + '" title="Premakni dol" aria-label="Premakni dol"' + (i===draftFields.length-1?' disabled':'') + '>↓</button>' +
+          '<button type="button" class="frow-x" data-act="fieldDel" data-idx="' + i + '" aria-label="Odstrani stolpec">×</button>' +
+        '</span>' +
+      '</div>' +
+      (needOpts ? '<input type="text" class="frow-opts" placeholder="Možnosti, ločene s ; (npr. OK; Poškodovano; Manjka)"' +
+        ' value="' + esc((f._opts !== undefined) ? f._opts : (f.options||[]).join('; ')) + '" data-input="fieldOpts" data-change="fieldOpts" data-idx="' + i + '">' +
+        colorRowsHTML(f, i) : '') +
+      '</div>';
+  });
+  host.innerHTML = h || '<div class="sub" style="color:var(--ink-soft);font-size:12.5px;margin-bottom:8px">Ta kategorija še nima dodatnih stolpcev.</div>';
+}
+function setDraftColor(idx, opt, color){
+  const f = draftFields[idx];
+  if(!f) return;
+  if(!f._colors) f._colors = Object.assign({}, f.colors || {});
+  if(color) f._colors[opt] = color;
+  else delete f._colors[opt];
+  renderFieldRows();
+}
+function addDraftField(){
+  draftFields.push({ id:'f_' + Date.now() + '_' + draftFields.length, name:'', type:'text', options:[], _opts:'', _colors:{} });
+  renderFieldRows();
+  const names = document.querySelectorAll('.frow-name');
+  if(names.length) names[names.length-1].focus();
+}
+function removeDraftField(i){
+  draftFields.splice(i, 1);
+  renderFieldRows();
+}
+function moveDraftField(i, d){
+  const j = i + d;
+  if(j<0 || j>=draftFields.length) return;
+  const t = draftFields[i]; draftFields[i] = draftFields[j]; draftFields[j] = t;
+  renderFieldRows();
+}
+/* vrne urejen seznam stolpcev ali null ob napaki (s toastom) */
+function collectDraftFields(){
+  const out = [];
+  for(const f of draftFields){
+    const name = (f.name||'').trim();
+    if(!name) continue;                   // prazne vrstice preskočimo
+    const fld = { id:f.id, name, type:f.type };
+    if(f.type==='select' || f.type==='multiselect'){
+      const raw = (f._opts !== undefined) ? f._opts : (f.options||[]).join('; ');
+      const opts = raw.split(';').map(s=>s.trim()).filter(Boolean);
+      if(!opts.length){ toast('Stolpec »' + name + '« potrebuje vsaj eno možnost (loči jih s ; ).'); return null; }
+      fld.options = opts;
+      const src = (f._colors !== undefined) ? f._colors : (f.colors || {});
+      const colors = {};                  // barve obdržimo le za možnosti, ki še obstajajo
+      for(const o of opts) if(src[o]) colors[o] = src[o];
+      fld.colors = colors;
+    }
+    out.push(fld);
+  }
+  return out;
+}
+
+/* ---------- nova kategorija ---------- */
+function addCategory(){
+  draftFields = [];
+  openModal(
+    '<h3>Nova kategorija</h3>' +
+    '<div class="fieldrow">' +
+      '<div class="field" style="flex:3"><label for="cName">Ime kategorije</label><input id="cName" placeholder="npr. Vodne aktivnosti"></div>' +
+      '<div class="field" style="flex:1"><label for="cIcon">Ikona</label><input id="cIcon" value="📁" maxlength="4" style="text-align:center;font-size:18px"></div>' +
+    '</div>' + emojiRowHTML() +
+    '<div class="field"><label for="cSubs">Podkategorije (neobvezno, loči s ; )</label>' +
+      '<input id="cSubs" placeholder="npr. Kanuji; Vesla; Jopiči"></div>' +
+    fieldEditorHTML() +
+    '<div class="actions">' +
+      '<button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
+      '<button class="btn btn-primary" data-act="catSubmit">Dodaj kategorijo</button>' +
+    '</div>');
+  renderFieldRows();
+  el('cName').focus();
+}
+function submitCategory(){
+  const name = el('cName').value.trim();
+  const icon = el('cIcon').value.trim() || '📁';
+  if(!name){ toast('Vpiši ime kategorije.'); return; }
+  if(categories.some(c=>c.name.toLowerCase()===name.toLowerCase())){ toast('Kategorija s tem imenom že obstaja.'); return; }
+  const fields = collectDraftFields();
+  if(fields === null) return;
+  const subs = el('cSubs').value.split(';').map(s=>s.trim()).filter(Boolean);
+  categories.push({ id:'cat_' + Date.now(), name, icon, subcats:[...new Set(subs)], fields });
+  saveData();
+  closeModal();
+  toast('Kategorija »' + name + '« dodana.');
+  switchView('cats');
+}
+
+/* ---------- urejanje kategorije: ime, ikona in podkategorije na enem mestu ---------- */
+function openEditCategory(id){
+  const c = catById(id);
+  if(!c) return;
+  draftCat = { id:c.id, subs:(c.subcats||[]).map(s=>({ orig:s, name:s })) };
+  openModal(
+    '<h3>Uredi kategorijo</h3>' +
+    '<div class="fieldrow">' +
+      '<div class="field" style="flex:3"><label for="cName">Ime kategorije</label><input id="cName" value="' + esc(c.name) + '"></div>' +
+      '<div class="field" style="flex:1"><label for="cIcon">Ikona</label><input id="cIcon" value="' + esc(c.icon) + '" maxlength="4" style="text-align:center;font-size:18px"></div>' +
+    '</div>' + emojiRowHTML() +
+    '<div class="field" style="margin-top:4px"><label>Podkategorije</label>' +
+      '<div class="hint" style="margin:-2px 0 8px">Preimenuj jih neposredno v poljih; preimenovanje se prenese na vse predmete. Podkategorije s predmeti ni mogoče odstraniti.</div>' +
+      '<div id="ceSubs"></div>' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-act="ceSubAdd">+ Dodaj podkategorijo</button></div>' +
+    '<div class="actions">' +
+      '<button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
+      '<button class="btn btn-primary" data-act="catEditSave" data-id="' + esc(c.id) + '">Shrani</button>' +
+    '</div>');
+  renderEditSubs();
+  el('cName').focus();
+}
+function renderEditSubs(){
+  const host = el('ceSubs');
+  if(!host || !draftCat) return;
+  let h = '';
+  draftCat.subs.forEach((s, i)=>{
+    h += '<div class="frow" style="padding:6px"><div class="frow-top">' +
+      '<input type="text" class="frow-name" placeholder="Ime podkategorije" value="' + esc(s.name) + '" data-input="ceSubName" data-idx="' + i + '">' +
+      '<span class="frow-btns"><button type="button" class="frow-x" data-act="ceSubDel" data-idx="' + i + '" aria-label="Odstrani podkategorijo">×</button></span>' +
+      '</div></div>';
+  });
+  host.innerHTML = h || '<div class="sub" style="color:var(--ink-soft);font-size:12.5px;margin-bottom:8px">Brez podkategorij.</div>';
+}
+function addEditSub(){
+  if(!draftCat) return;
+  draftCat.subs.push({ orig:null, name:'' });
+  renderEditSubs();
+  const names = document.querySelectorAll('#ceSubs .frow-name');
+  if(names.length) names[names.length-1].focus();
+}
+function removeEditSub(i){
+  if(!draftCat) return;
+  draftCat.subs.splice(i, 1);
+  renderEditSubs();
+}
+function saveEditCategory(id){
+  const c = catById(id);
+  if(!c || !draftCat) return;
+  const name = el('cName').value.trim();
+  const icon = el('cIcon').value.trim() || c.icon;
+  if(!name){ toast('Vpiši ime kategorije.'); return; }
+  if(categories.some(x=>x.id!==id && x.name.toLowerCase()===name.toLowerCase())){ toast('Kategorija s tem imenom že obstaja.'); return; }
+  /* sestavi nove podkategorije, preveri prazne in podvojene */
+  const rows = draftCat.subs.map(s=>({ orig:s.orig, name:(s.name||'').trim() })).filter(s=>s.name);
+  const lower = rows.map(s=>s.name.toLowerCase());
+  if(new Set(lower).size !== lower.length){ toast('Podkategorije se ne smejo ponavljati.'); return; }
+  /* odstranjene podkategorije z obstoječimi predmeti niso dovoljene */
+  const removed = (c.subcats||[]).filter(orig => !rows.some(r=>r.orig===orig));
+  for(const r of removed){
+    const cnt = inventory.filter(i=>i.cat===id && i.subcat===r).length;
+    if(cnt>0){ toast('Podkategorija »' + r + '« vsebuje ' + cnt + ' predmetov in je ni mogoče odstraniti.'); return; }
+  }
+  /* preimenovanja prenesi na predmete */
+  for(const r of rows){
+    if(r.orig && r.orig !== r.name){
+      for(const i of inventory) if(i.cat===id && i.subcat===r.orig) i.subcat = r.name;
+    }
+  }
+  c.name = name;
+  c.icon = icon;
+  c.subcats = rows.map(r=>r.name);
+  draftCat = null;
+  saveData();
+  closeModal();
+  toast('Kategorija shranjena.');
+  switchView('cats');
+}
+
+/* ---------- preimenovanje kategorije ---------- */
+function openRenameCategory(id){
+  const c = catById(id);
+  if(!c) return;
+  openModal(
+    '<h3>Preimenuj kategorijo</h3>' +
+    '<div class="fieldrow">' +
+      '<div class="field" style="flex:3"><label for="cName">Ime kategorije</label><input id="cName" value="' + esc(c.name) + '"></div>' +
+      '<div class="field" style="flex:1"><label for="cIcon">Ikona</label><input id="cIcon" value="' + esc(c.icon) + '" maxlength="4" style="text-align:center;font-size:18px"></div>' +
+    '</div>' + emojiRowHTML() +
+    '<div class="actions">' +
+      '<button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
+      '<button class="btn btn-primary" data-act="catRenameSave" data-id="' + esc(c.id) + '">Shrani</button>' +
+    '</div>');
+  el('cName').focus();
+  el('cName').select();
+}
+function saveRenameCategory(id){
+  const c = catById(id);
+  if(!c) return;
+  const name = el('cName').value.trim();
+  const icon = el('cIcon').value.trim() || c.icon;
+  if(!name){ toast('Vpiši ime kategorije.'); return; }
+  if(categories.some(x=>x.id!==id && x.name.toLowerCase()===name.toLowerCase())){ toast('Kategorija s tem imenom že obstaja.'); return; }
+  c.name = name; c.icon = icon;
+  saveData();
+  closeModal();
+  toast('Kategorija preimenovana.');
+  switchView('cats');
+}
+
+/* ---------- urejanje stolpcev obstoječe kategorije ---------- */
+function editCategoryFields(id){
+  const c = catById(id);
+  if(!c) return;
+  /* delovna kopija — sprememba velja šele ob "Shrani" */
+  draftFields = (c.fields||[]).map(f=>({ id:f.id, name:f.name, type:f.type, options:(f.options||[]).slice(),
+    colors:Object.assign({}, f.colors||{}), _colors:Object.assign({}, f.colors||{}), _opts:(f.options||[]).join('; ') }));
+  openModal(
+    '<h3>' + esc(c.icon) + ' ' + esc(c.name) + ' — stolpci tabele</h3>' +
+    '<div class="hint">Vrednosti že vpisanih stolpcev se ohranijo; izbrisani stolpci izginejo iz tabele, podatki pa ostanejo v kopijah.</div>' +
+    fieldEditorHTML() +
+    '<div class="actions">' +
+      '<button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
+      '<button class="btn btn-primary" data-act="catFieldsSave" data-id="' + esc(c.id) + '">Shrani stolpce</button>' +
+    '</div>');
+  renderFieldRows();
+}
+function saveCategoryFields(id){
+  const c = catById(id);
+  if(!c) return;
+  const fields = collectDraftFields();
+  if(fields === null) return;
+  c.fields = fields;
+  saveData();
+  closeModal();
+  toast('Stolpci shranjeni.');
+  refreshCurrent();
+  if(activeNav!=='cats') switchView('cats');
+}
+
+/* ---------- podkategorije ---------- */
+function addSubcat(catId){
+  const c = catById(catId);
+  if(!c) return;
+  openModal(
+    '<h3>Nova podkategorija</h3>' +
+    '<div class="hint">Kategorija: ' + esc(c.icon) + ' ' + esc(c.name) + '</div>' +
+    '<div class="field"><label for="sName">Ime podkategorije</label><input id="sName" placeholder="npr. Sekire"></div>' +
+    '<div class="actions">' +
+      '<button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
+      '<button class="btn btn-primary" data-act="subSubmit" data-id="' + esc(c.id) + '">Dodaj</button>' +
+    '</div>');
+  el('sName').focus();
+}
+function submitSubcat(catId){
+  const c = catById(catId);
+  if(!c) return;
+  const name = el('sName').value.trim();
+  if(!name){ toast('Vpiši ime podkategorije.'); return; }
+  if(c.subcats.some(s=>s.toLowerCase()===name.toLowerCase())){ toast('Podkategorija že obstaja.'); return; }
+  c.subcats.push(name);
+  saveData();
+  closeModal();
+  toast('Podkategorija »' + name + '« dodana.');
+  switchView('cats');
+}
+function openRenameSubcat(catId, sub){
+  const c = catById(catId);
+  if(!c || !c.subcats.includes(sub)) return;
+  openModal(
+    '<h3>Preimenuj podkategorijo</h3>' +
+    '<div class="hint">Kategorija: ' + esc(c.icon) + ' ' + esc(c.name) + ' — preimenovanje se prenese tudi na vse predmete.</div>' +
+    '<div class="field"><label for="sName">Ime podkategorije</label><input id="sName" value="' + esc(sub) + '"></div>' +
+    '<div class="actions">' +
+      '<button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
+      '<button class="btn btn-primary" data-act="subRenameSave" data-id="' + esc(c.id) + '" data-sub="' + esc(sub) + '">Shrani</button>' +
+    '</div>');
+  el('sName').focus();
+  el('sName').select();
+}
+function saveRenameSubcat(catId, oldName){
+  const c = catById(catId);
+  if(!c) return;
+  const idx = c.subcats.indexOf(oldName);
+  if(idx<0) return;
+  const name = el('sName').value.trim();
+  if(!name){ toast('Vpiši ime podkategorije.'); return; }
+  if(name!==oldName && c.subcats.some(s=>s.toLowerCase()===name.toLowerCase())){ toast('Podkategorija s tem imenom že obstaja.'); return; }
+  c.subcats[idx] = name;
+  for(const i of inventory){             // posodobi tudi vse predmete s to podkategorijo
+    if(i.cat===catId && i.subcat===oldName) i.subcat = name;
+  }
+  saveData();
+  closeModal();
+  toast('Podkategorija preimenovana.');
+  switchView('cats');
+}
+
+/* ---------- brisanje ---------- */
+function deleteCategory(id){
+  const c = catById(id);
+  if(!c) return;
+  const cnt = inventory.filter(i=>i.cat===id).length;
+  if(cnt>0){ toast('Kategorija vsebuje ' + cnt + ' predmetov — najprej jih premakni ali izbriši.'); return; }
+  confirmDialog('Kategorija »' + c.name + '« bo trajno izbrisana, skupaj s podkategorijami in nastavitvami stolpcev.', async ()=>{
+    try{
+      await deleteDbRow('categories', id);
+      categories = categories.filter(x=>x.id!==id);
+      toast('Kategorija izbrisana.');
+      switchView('cats');
+    }catch(e){
+      console.error(e);
+      toast('Kategorije ni bilo mogoče izbrisati: ' + (e.message || e));
+    }
+  });
+}
+function deleteSubcat(catId, sub){
+  const c = catById(catId);
+  if(!c) return;
+  const cnt = inventory.filter(i=>i.cat===catId && i.subcat===sub).length;
+  if(cnt>0){ toast('Podkategorija vsebuje ' + cnt + ' predmetov — najprej jih premakni.'); return; }
+  confirmDialog('Podkategorija »' + sub + '« v kategoriji »' + c.name + '« bo izbrisana.', ()=>{
+    c.subcats = c.subcats.filter(s=>s!==sub);
+    saveData();
+    toast('Podkategorija izbrisana.');
+    switchView('cats');
+  });
+}
+
+/* =====================================================================
+   14. MODALNA OKNA, POTRDITVE IN OBVESTILA
+===================================================================== */
+function openModal(html){
+  el('modalBox').innerHTML = html;
+  el('modalWrap').classList.add('on');
+}
+function closeModal(){
+  el('modalWrap').classList.remove('on');
+  el('modalBox').innerHTML = '';
+}
+/* lepo potrditveno okno; besedilo gre prek textContent (varno pred XSS) */
+function confirmDialog(msg, cb, btnLabel){
+  el('confirmMsg').textContent = msg;
+  el('confirmBtn').textContent = btnLabel || 'Izbriši';
+  confirmCb = cb;
+  el('confirmWrap').classList.add('on');
+}
+function closeConfirm(){
+  el('confirmWrap').classList.remove('on');
+  confirmCb = null;
+}
+function confirmYes(){
+  const cb = confirmCb;
+  closeConfirm();
+  if(cb) cb();
+}
+let toastTimer = null;
+function toast(msg){
+  const t = el('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('on'), 2600);
+}
+
+/* =====================================================================
+   15. DOGODKOVNA DELEGACIJA
+   Vsi kliki, spremembe in vnosi tečejo prek data-* atributov — nikjer
+   se uporabniški podatki ne vstavljajo v JavaScript nize (zaščita XSS).
+===================================================================== */
+const ACTIONS = {
+  /* prijava in ogrodje */
+  login:      ()=>doLogin(),
+  showRegister:()=>showRegister(true),
+  showLogin:  ()=>showRegister(false),
+  register:   ()=>doRegister(),
+  userNew:    ()=>openUserModal(),
+  userSave:   ()=>saveUser(),
+  userDel:    b=>deleteUser(b.dataset.id),
+  logout:     ()=>doLogout(),
+  menu:       ()=>toggleSidebar(),
+  menuClose:  ()=>toggleSidebar(false),
+  nav:        b=>{ if(b.dataset.view==='browse') browseState = { cat:null, subcat:null, q:'' };
+                   switchView(b.dataset.view); },
+  cat:        b=>gotoCat(b.dataset.id),
+  /* pregled in filtri */
+  subFilter:  b=>{ browseState.subcat = b.dataset.sub || null; renderBrowse(el('main')); },
+  sort:       b=>{ const k=b.dataset.key;
+                   tableSort = (tableSort.key===k) ? {key:k, dir:-tableSort.dir} : {key:k, dir:1};
+                   if(activeNav==='all') updateAllTable(); else updateBrowseTable(); },
+  allCat:     b=>{ allFilter.cat = b.dataset.id || null; renderAll(el('main')); },
+  allStatus:  b=>{ allFilter.status = b.dataset.id || null; renderAll(el('main')); },
+  allClear:   ()=>{ allFilter = { cat:null, status:null, q:'' }; renderAll(el('main')); },
+  showOverdue:()=>{ allFilter = { cat:null, status:'overdue', q:'' }; switchView('all'); },
+  /* predmeti */
+  itemNew:    b=>openItemModal(null, b.dataset.cat, b.dataset.sub),
+  itemEdit:   b=>openItemModal(b.dataset.id),
+  itemSave:   b=>saveItem(b.dataset.id || null),
+  itemDel:    b=>deleteItem(b.dataset.id),
+  /* izposoja in vračilo */
+  borrow:     b=>openBorrowModal(b.dataset.id),
+  borrowSave: b=>submitBorrow(b.dataset.id),
+  qtyStep:    b=>{ const i = el(b.dataset.target); if(!i) return;
+                   const min = parseInt(i.min||'1',10), max = parseInt(i.max||'9999',10);
+                   const v = (parseInt(i.value,10)||min) + parseInt(b.dataset.d,10);
+                   i.value = Math.max(min, Math.min(max, v)); },
+  due:        b=>{ const i = el('bUntil'); if(i) i.value = plusDaysISO(parseInt(b.dataset.days,10)); },
+  return:     b=>openReturnModal(b.dataset.id),
+  returnSave: b=>submitReturn(b.dataset.id, parseInt(b.dataset.idx,10)),
+  returnGroup:b=>returnGroup(b.dataset.gid),
+  /* skupinska izposoja (košarica) */
+  cartAdd:    b=>cartAdd(b.dataset.code),
+  cartRemove: b=>cartRemove(b.dataset.code),
+  cartStep:   b=>cartStep(b.dataset.code, parseInt(b.dataset.d,10)),
+  cartDue:    b=>{ const i = el('cUntil'); if(i) i.value = plusDaysISO(parseInt(b.dataset.days,10)); },
+  cartSubmit: ()=>submitCartLoan(),
+  /* večizbirni stolpci */
+  multiField: b=>openMultiField(b.dataset.id, b.dataset.fid),
+  multiSave:  b=>saveMultiField(b.dataset.id, b.dataset.fid),
+  /* koledar */
+  calToggle:  ()=>toggleCalPop(),
+  calClose:   ()=>closeCalPop(),
+  calShift:   b=>calShift(parseInt(b.dataset.d,10)),
+  calToday:   ()=>calToday(),
+  calDay:     b=>selectCalDay(b.dataset.iso),
+  calDayClose:()=>selectCalDay(null),
+  calItem:    b=>{ closeCalPop(); showItemDetail(b.dataset.id); },
+  /* QR, Excel, kopija, dnevnik */
+  qrAll:      b=>qrSelectAll(b.dataset.on==='1'),
+  qrPrint:    ()=>printLabels(),
+  excel:      ()=>exportExcel(),
+  backupExport: ()=>exportJSON(),
+  backupPick: ()=>{ const f = el('importFile'); if(f) f.click(); },
+  logClear:   ()=>clearLog(),
+  /* kategorije in stolpci */
+  catNew:        ()=>addCategory(),
+  catSubmit:     ()=>submitCategory(),
+  catEdit:       b=>openEditCategory(b.dataset.id),
+  catEditSave:   b=>saveEditCategory(b.dataset.id),
+  ceSubAdd:      ()=>addEditSub(),
+  ceSubDel:      b=>removeEditSub(parseInt(b.dataset.idx,10)),
+  catRename:     b=>openRenameCategory(b.dataset.id),
+  catRenameSave: b=>saveRenameCategory(b.dataset.id),
+  catFields:     b=>editCategoryFields(b.dataset.id),
+  catFieldsSave: b=>saveCategoryFields(b.dataset.id),
+  subAdd:        b=>addSubcat(b.dataset.id),
+  subSubmit:     b=>submitSubcat(b.dataset.id),
+  subRename:     b=>openRenameSubcat(b.dataset.id, b.dataset.sub),
+  subRenameSave: b=>saveRenameSubcat(b.dataset.id, b.dataset.sub),
+  subDel:        b=>deleteSubcat(b.dataset.id, b.dataset.sub),
+  catDel:        b=>deleteCategory(b.dataset.id),
+  emoji:         b=>setCatIcon(b.dataset.e),
+  fieldAdd:      ()=>addDraftField(),
+  fieldUp:       b=>moveDraftField(parseInt(b.dataset.idx,10), -1),
+  fieldDown:     b=>moveDraftField(parseInt(b.dataset.idx,10), 1),
+  fieldDel:      b=>removeDraftField(parseInt(b.dataset.idx,10)),
+  fieldColor:    b=>setDraftColor(parseInt(b.dataset.idx,10), b.dataset.opt, b.dataset.c),
+  /* okna */
+  modalClose: ()=>closeModal(),
+  modalBg:    (b,e)=>{ if(e.target===el('modalWrap')) closeModal(); },
+  confirmNo:  ()=>closeConfirm(),
+  confirmBg:  (b,e)=>{ if(e.target===el('confirmWrap')) closeConfirm(); },
+  confirmYes: ()=>confirmYes()
+};
+
+document.addEventListener('click', e=>{
+  const b = e.target.closest('[data-act]');
+  if(b){
+    const fn = ACTIONS[b.dataset.act];
+    if(fn){ fn(b, e); }
+    return;
+  }
+  /* klik na vrstico tabele odpre kartico predmeta */
+  const row = e.target.closest('tr.rowlink');
+  if(row && !e.target.closest('button,input,select,a,label')){
+    showItemDetail(row.dataset.id);
+    return;
+  }
+  /* klik izven koledarja ga zapre */
+  const pop = el('calPop');
+  if(pop && pop.classList.contains('on') && !e.target.closest('#calPop') && !e.target.closest('#calFab')){
+    closeCalPop();
+  }
+});
+
+const CHANGES = {
+  customChk:  t=>setCustom(t.dataset.id, t.dataset.fid, t.checked),
+  customSel:  t=>{
+    setCustom(t.dataset.id, t.dataset.fid, t.value);
+    const item = itemByCode(t.dataset.id);             // izbirnik takoj obarvamo po novi vrednosti
+    const f = item ? catFields(item.cat).find(x=>x.id===t.dataset.fid) : null;
+    const c = f ? optColor(f, t.value) : null;
+    t.style.color = c || ''; t.style.borderColor = c || ''; t.style.fontWeight = c ? '700' : '';
+  },
+  customTxt:  t=>setCustom(t.dataset.id, t.dataset.fid, t.value.trim()),
+  customDate: t=>{                       // ročni vpis datuma z normalizacijo
+    const raw = t.value.trim();
+    if(!raw){ setCustom(t.dataset.id, t.dataset.fid, ''); return; }
+    const iso = parseDateInput(raw);
+    if(!iso){
+      toast('Neveljaven datum. Primeri: 15. 6. 2026, 15.6.26, 2026-06-15');
+      const item = itemByCode(t.dataset.id);
+      t.value = fmtDateInput(item && item.custom ? (item.custom[t.dataset.fid]||'') : '');
+      return;
+    }
+    setCustom(t.dataset.id, t.dataset.fid, iso);
+    t.value = fmtDateInput(iso);
+  },
+  multiChk:   t=>multiExclusive(t),
+  itemCat:    t=>fillSubcats(),
+  fieldType:  t=>{ const f = draftFields[parseInt(t.dataset.idx,10)]; if(f){ f.type = t.value; renderFieldRows(); } },
+  fieldOpts:  t=>{ const f = draftFields[parseInt(t.dataset.idx,10)]; if(f){ f._opts = t.value; renderFieldRows(); } },
+  calMonth:   t=>{ calM = parseInt(t.value,10); calSelDay = null; renderCalPop(); },
+  calYear:    t=>{ calY = parseInt(t.value,10); calSelDay = null; renderCalPop(); },
+  logType:    t=>{ logFilter.type = t.value; updateLogTable(); },
+  userRole:   t=>setUserRole(t.dataset.id, t.value),
+  importFile: t=>handleImportFile(t)
+};
+document.addEventListener('change', e=>{
+  const t = e.target.closest('[data-change]');
+  if(!t) return;
+  const fn = CHANGES[t.dataset.change];
+  if(fn) fn(t);
+});
+
+const INPUTS = {
+  globalSearch: t=>globalSearch(t.value),
+  browseSearch: t=>{ browseState.q = t.value; updateBrowseTable(); },
+  allSearch:    t=>{ allFilter.q = t.value; updateAllTable(); },
+  logSearch:    t=>{ logFilter.q = t.value; updateLogTable(); },
+  cartSearch:   t=>{ cartQ = t.value; renderCartResults(); },
+  cartQty:      t=>cartSetQty(t.dataset.code, t.value),
+  ceSubName:    t=>{ if(draftCat){ const s = draftCat.subs[parseInt(t.dataset.idx,10)]; if(s) s.name = t.value; } },
+  fieldName:    t=>{ const f = draftFields[parseInt(t.dataset.idx,10)]; if(f) f.name = t.value; },
+  fieldOpts:    t=>{ const f = draftFields[parseInt(t.dataset.idx,10)]; if(f) f._opts = t.value; }
+};
+document.addEventListener('input', e=>{
+  const t = e.target.closest('[data-input]');
+  if(!t) return;
+  const fn = INPUTS[t.dataset.input];
+  if(fn) fn(t);
+});
+
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape'){
+    if(el('confirmWrap').classList.contains('on'))      closeConfirm();
+    else if(el('modalWrap').classList.contains('on'))   closeModal();
+    else if(el('calPop').classList.contains('on'))      closeCalPop();
+    return;
+  }
+  if(e.key==='Enter'){
+    if(e.target.id==='loginUser'){ el('loginPass').focus(); return; }
+    if(e.target.id==='loginPass'){ doLogin(); return; }
+    if(e.target.id==='regPass'){ doRegister(); return; }
+    if(e.target.id==='sName'){      // Enter v oknu podkategorije potrdi vnos
+      const btn = el('modalBox').querySelector('[data-act="subSubmit"],[data-act="subRenameSave"]');
+      if(btn) btn.click();
+    }
+  }
+});
+
+/* =====================================================================
+   16. ZAGON APLIKACIJE
+===================================================================== */
+(async function init(){
+  try{
+    if(!supabaseReady()){
+      el('loginErr').textContent = 'Najprej v HTML vpiši SUPABASE_URL in SUPABASE_PUBLISHABLE_KEY.';
+      el('loginUser').focus();
+      return;
+    }
+    const { data, error } = await sb.auth.getUser();
+    if(error) console.warn(error);
+    if(data && data.user){
+      await loadData();
+      currentUser = await ensureCurrentProfile(data.user);
+      if(!users.some(u=>u.id===currentUser.id)) users.push(currentUser);
+      enterApp();
+    }else{
+      el('loginUser').focus();
+    }
+  }catch(e){
+    console.error(e);
+    el('loginErr').textContent = 'Zagon ni uspel: ' + (e.message || e);
+    el('loginUser').focus();
+  }
+})();
+</script>
+</body>
+</html>
