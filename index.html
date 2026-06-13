@@ -361,6 +361,10 @@ tr.rowlink:hover td{background:#F1EDDD}
 .qtystep button:hover{border-color:var(--pine);background:#EFF3EC}
 .qtystep input{width:64px;text-align:center;padding:7px 4px;border:1px solid var(--line);border-radius:7px}
 .duechips{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.whobox{
+  background:var(--canvas);border:1px solid var(--line);border-radius:var(--r);
+  padding:10px 12px;font-weight:600;color:var(--ink);line-height:1.45;
+}
 
 /* ---------- skupinska izposoja (košarica) ---------- */
 .cart-cols{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
@@ -969,6 +973,14 @@ function itemByCode(code){
   return inventory.find(i => String(i.id).toUpperCase() === c);
 }
 function isAdmin(){ return currentUser && currentUser.role === 'admin'; }
+/* opremo lahko vrne gospodar opreme ali tisti, ki si jo je izposodil */
+function canReturn(loan){
+  if(isAdmin()) return true;
+  if(!currentUser || !loan) return false;
+  if(loan.borrowerId && loan.borrowerId === currentUser.id) return true;
+  if(loan.email && currentUser.email && loan.email.toLowerCase() === currentUser.email.toLowerCase()) return true;
+  return false;
+}
 
 /* seznam znanih izposojevalcev za hitrejši vnos pri izposoji */
 function knownBorrowers(){
@@ -1007,6 +1019,11 @@ function whoInline(o){
 function whoText(o){
   if(!o || !o.borrower) return '';
   return o.borrower + (o.email ? ' <' + o.email + '>' : '');
+}
+/* prikaz uporabniškega računa (ime + e-mail) — za prijavljenega uporabnika */
+function whoUserHTML(u){
+  if(!u) return '';
+  return esc(userDisplay(u)) + (u.email ? '<br><small style="color:var(--ink-soft)">' + esc(u.email) + '</small>' : '');
 }
 
 /* =====================================================================
@@ -1372,7 +1389,7 @@ function itemCardHTML(item, ctx){
   }
   h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">';
   if(av > 0) h += '<button class="btn btn-accent" data-act="borrow" data-id="' + esc(item.id) + '">↗ Izposodi</button>';
-  if(borrowedQty(item) > 0) h += '<button class="btn btn-primary" data-act="return" data-id="' + esc(item.id) + '">↩ Vrni</button>';
+  if(borrowedQty(item) > 0 && (isAdmin() || (item.loans||[]).some(canReturn))) h += '<button class="btn btn-primary" data-act="return" data-id="' + esc(item.id) + '">↩ Vrni</button>';
   if(isAdmin()) h += '<button class="btn btn-ghost" data-act="itemEdit" data-id="' + esc(item.id) + '">Uredi</button>';
   h += '</div></div>';
   return h;
@@ -1646,8 +1663,8 @@ function openBorrowModal(id){
     '<h3>Izposoja — ' + esc(item.name) + ' <span class="tag">' + esc(item.id) + '</span></h3>' +
     '<div class="availbar"><b>' + av + '</b><span class="lbl">od ' + item.qty + ' kosov<br>na voljo</span>' +
       '<span class="meter"><i style="width:' + Math.round(borrowedQty(item)/item.qty*100) + '%"></i></span></div>' +
-    '<div class="field"><label>Tabornik (registriran uporabnik)</label>' +
-      '<select id="bWho"><option value="">— izberi uporabnika —</option>' + userOptions(currentUser?currentUser.id:'') + '</select></div>' +
+    '<div class="field"><label>Izposoja se na</label>' +
+      '<div class="whobox">' + whoUserHTML(currentUser) + '</div></div>' +
     '<div class="fieldrow">' +
       '<div class="field"><label>Količina</label>' +
         '<div class="qtystep">' +
@@ -1667,22 +1684,21 @@ function openBorrowModal(id){
       '<button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
       '<button class="btn btn-accent" data-act="borrowSave" data-id="' + esc(item.id) + '">↗ Izposodi</button>' +
     '</div>');
-  el('bWho').focus();
+  el('bQty').focus();
 }
 function submitBorrow(id){
   const item = itemByCode(id);
   if(!item) return;
-  const u = userById(el('bWho').value);
+  if(!currentUser){ toast('Najprej se prijavi.'); return; }
   const qty = parseInt(el('bQty').value, 10);
   const until = el('bUntil').value;
   const note = el('bNote').value.trim();
   const av = availQty(item);
-  if(!u){ toast('Izberi registriranega uporabnika.'); return; }
   if(!qty || qty<1 || qty>av){ toast('Količina mora biti med 1 in ' + av + '.'); return; }
   if(!until){ toast('Izberi datum vračila.'); return; }
-  const who = userDisplay(u);
-  item.loans.push({ borrower:who, email:u.email, borrowerId:u.id, qty, from:todayISO(), until, note });
-  log.unshift({ type:'borrow', code:item.id, name:item.name, borrower:who, email:u.email, borrowerId:u.id, qty, until, time:new Date().toLocaleString('sl-SI') });
+  const who = userDisplay(currentUser);
+  item.loans.push({ borrower:who, email:currentUser.email, borrowerId:currentUser.id, qty, from:todayISO(), until, note });
+  log.unshift({ type:'borrow', code:item.id, name:item.name, borrower:who, email:currentUser.email, borrowerId:currentUser.id, qty, until, time:new Date().toLocaleString('sl-SI') });
   saveData();
   closeModal();
   toast('Izposojeno: ' + qty + ' × ' + item.name + ' → ' + who);
@@ -1691,29 +1707,41 @@ function submitBorrow(id){
 function openReturnModal(id){
   const item = itemByCode(id);
   if(!item || !item.loans.length){ toast('Ta predmet nima odprtih izposoj.'); return; }
+  const anyMine = item.loans.some(canReturn);
   let h = '<h3>Vračilo — ' + esc(item.name) + ' <span class="tag">' + esc(item.id) + '</span></h3>' +
-    (item.loans.length>1 ? '<div class="hint">Izberi, kdo vrača opremo, in vpiši, koliko kosov vrača.</div>' : '');
+    '<div class="hint">' + (isAdmin()
+      ? 'Kot gospodar opreme lahko vrneš katero koli izposojo. Vpiši, koliko kosov se vrača (lahko celoto ali del).'
+      : 'Vrneš lahko le opremo, ki si si jo izposodil. Vpiši, koliko kosov vračaš (celoto ali del).') + '</div>';
   item.loans.forEach((l,idx)=>{
+    const mine = canReturn(l);
     h += '<div class="loanrow' + (isOverdue(l)?' late':'') + '" style="margin-bottom:8px">' +
       '<span class="who">' + whoHTML(l) + '</span>' +
       '<span>' + l.qty + ' kos' + (l.qty===1?'':'ov') + '</span>' +
       '<span class="' + (isOverdue(l)?'overdue':'') + '">do ' + fmtDate(l.until) + (isOverdue(l)?' ⚠ ZAMUDA':'') + '</span>' +
-      '<span class="loanctl">Vrne:' +
-        '<input id="rQty' + idx + '" type="number" min="1" max="' + l.qty + '" value="' + l.qty + '">' +
-        '<button class="btn btn-primary btn-sm" data-act="returnSave" data-id="' + esc(item.id) + '" data-idx="' + idx + '">↩ Vrni</button>' +
-      '</span></div>';
+      (mine
+        ? '<span class="loanctl">Vrne:' +
+            '<input id="rQty' + idx + '" type="number" min="1" max="' + l.qty + '" value="' + l.qty + '">' +
+            '<button class="btn btn-primary btn-sm" data-act="returnSave" data-id="' + esc(item.id) + '" data-idx="' + idx + '">↩ Vrni</button>' +
+          '</span>'
+        : '<span style="color:var(--ink-soft);font-size:12.5px">vrne lahko le izposojevalec ali gospodar opreme</span>') +
+      '</div>';
   });
-  /* če je predmet del skupinske izposoje, ponudi vračilo cele skupine naenkrat */
+  /* če je predmet del skupinske izposoje, ponudi vračilo cele skupine naenkrat
+     (le če lahko vračaš to izposojo) */
   const gids = [...new Set(item.loans.filter(l=>l.gid).map(l=>l.gid))];
   for(const gid of gids){
     const sib = loansByGid(gid);
     const itemCount = new Set(sib.map(s=>s.item.id)).size;
     if(itemCount < 2) continue;
+    if(!sib.some(s=>canReturn(s.loan))) continue;
     const totalQty = sib.reduce((s,x)=>s+x.loan.qty, 0);
     h += '<div class="loanrow" style="margin-bottom:8px;border-color:var(--ember);background:#FBF1E8;flex-direction:column;align-items:stretch;gap:8px">' +
       '<div><b>Skupinska izposoja</b> — ' + whoHTML(sib[0].loan) + ': ' + itemCount + ' predmetov, ' + totalQty + ' kosov</div>' +
       '<button class="btn btn-accent btn-sm" style="align-self:flex-start" data-act="returnGroup" data-gid="' + esc(gid) + '">↩ Vrni celotno skupino</button>' +
     '</div>';
+  }
+  if(!anyMine && !isAdmin()){
+    h += '<div class="hint" style="color:var(--alert)">Te opreme nimaš izposojene, zato je ne moreš vrniti.</div>';
   }
   h += '<div class="actions"><button class="btn btn-ghost" data-act="modalClose">Zapri</button></div>';
   openModal(h);
@@ -1728,9 +1756,10 @@ function submitReturn(id, idx){
   const item = itemByCode(id);
   if(!item || !item.loans[idx]) return;
   const l = item.loans[idx];
+  if(!canReturn(l)){ toast('To opremo lahko vrne le izposojevalec ali gospodar opreme.'); return; }
   const q = parseInt(el('rQty'+idx).value, 10);
   if(!q || q<1 || q>l.qty){ toast('Količina mora biti med 1 in ' + l.qty + '.'); return; }
-  l.qty -= q;
+  l.qty -= q;                              // delno vračilo zmanjša količino, celotno odstrani izposojo
   const who = l.borrower;
   if(l.qty===0) item.loans.splice(idx,1);
   log.unshift({ type:'return', code:item.id, name:item.name, borrower:who, email:l.email, borrowerId:l.borrowerId, qty:q, time:new Date().toLocaleString('sl-SI') });
@@ -1744,6 +1773,7 @@ function submitReturn(id, idx){
 function returnGroup(gid){
   const sib = loansByGid(gid);
   if(!sib.length){ toast('Ta skupina nima odprtih izposoj.'); return; }
+  if(!sib.some(s=>canReturn(s.loan))){ toast('To skupino lahko vrne le izposojevalec ali gospodar opreme.'); return; }
   const rgid = 'R' + Date.now();
   const time = new Date().toLocaleString('sl-SI');
   for(const { item, loan } of sib){
@@ -1768,7 +1798,7 @@ function cartItemCount(){ return cart.reduce((s,c)=>s+c.qty, 0); }
 function renderCart(m){
   m.innerHTML =
     '<h2 class="view-title">Izposoja</h2>' +
-    '<div class="view-sub">Dodaj več predmetov v košarico in jih izposodi naenkrat — vse se zabeleži kot ena izposoja na istega uporabnika z istim rokom.</div>' +
+    '<div class="view-sub">Dodaj več predmetov v košarico in jih izposodi naenkrat — vse se zabeleži kot ena izposoja nate, z istim rokom.</div>' +
     '<div class="cart-cols">' +
       '<div class="cart-pick">' +
         '<div class="toolrow"><input type="search" id="cartSearch" data-input="cartSearch" placeholder="Išči predmet za dodajanje …" value="' + esc(cartQ) + '"></div>' +
@@ -1776,8 +1806,8 @@ function renderCart(m){
       '</div>' +
       '<div class="cart-side">' +
         '<div id="cartBasket"></div>' +
-        '<div class="field"><label>Tabornik (registriran uporabnik)</label>' +
-          '<select id="cWho"><option value="">— izberi uporabnika —</option>' + userOptions(currentUser?currentUser.id:'') + '</select></div>' +
+        '<div class="field"><label>Izposoja se na</label>' +
+          '<div class="whobox">' + whoUserHTML(currentUser) + '</div></div>' +
         '<div class="field"><label>Vrni do</label><input id="cUntil" type="date" value="' + plusDaysISO(14) + '">' +
           '<div class="duechips">' +
             '<button type="button" class="chip chip-sm" data-act="cartDue" data-days="7">+7 dni</button>' +
@@ -1873,10 +1903,9 @@ function cartSetQty(code, val){           // ob tipkanju posodobi stanje brez po
 }
 function submitCartLoan(){
   if(!cart.length){ toast('Košarica je prazna.'); return; }
-  const u = userById(el('cWho').value);
+  if(!currentUser){ toast('Najprej se prijavi.'); return; }
   const until = el('cUntil').value;
   const note = el('cNote').value.trim();
-  if(!u){ toast('Izberi registriranega uporabnika.'); el('cWho').focus(); return; }
   if(!until){ toast('Izberi datum vračila.'); return; }
   /* preveri razpoložljivost vseh predmetov pred zapisom */
   for(const c of cart){
@@ -1886,13 +1915,13 @@ function submitCartLoan(){
       toast('Za ' + item.name + ' je na voljo le ' + availQty(item) + ' kosov.'); return;
     }
   }
-  const who = userDisplay(u);
+  const who = userDisplay(currentUser);
   const gid = 'L' + Date.now();
   const time = new Date().toLocaleString('sl-SI');
   for(const c of cart){
     const item = itemByCode(c.code);
-    item.loans.push({ borrower:who, email:u.email, borrowerId:u.id, qty:c.qty, from:todayISO(), until, note, gid });
-    log.unshift({ type:'borrow', code:item.id, name:item.name, borrower:who, email:u.email, borrowerId:u.id, qty:c.qty, until, time, gid });
+    item.loans.push({ borrower:who, email:currentUser.email, borrowerId:currentUser.id, qty:c.qty, from:todayISO(), until, note, gid });
+    log.unshift({ type:'borrow', code:item.id, name:item.name, borrower:who, email:currentUser.email, borrowerId:currentUser.id, qty:c.qty, until, time, gid });
   }
   const n = cart.length;
   cart = [];
