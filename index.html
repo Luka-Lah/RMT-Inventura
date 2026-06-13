@@ -1664,7 +1664,9 @@ function openBorrowModal(id){
     '<div class="availbar"><b>' + av + '</b><span class="lbl">od ' + item.qty + ' kosov<br>na voljo</span>' +
       '<span class="meter"><i style="width:' + Math.round(borrowedQty(item)/item.qty*100) + '%"></i></span></div>' +
     '<div class="field"><label>Izposoja se na</label>' +
-      '<div class="whobox">' + whoUserHTML(currentUser) + '</div></div>' +
+      (isAdmin()
+        ? '<select id="bWho">' + userOptions(currentUser?currentUser.id:'') + '</select>'
+        : '<div class="whobox">' + whoUserHTML(currentUser) + '</div>') + '</div>' +
     '<div class="fieldrow">' +
       '<div class="field"><label>Količina</label>' +
         '<div class="qtystep">' +
@@ -1690,15 +1692,21 @@ function submitBorrow(id){
   const item = itemByCode(id);
   if(!item) return;
   if(!currentUser){ toast('Najprej se prijavi.'); return; }
+  /* admin lahko izbere izposojevalca; ostali se izposodijo nase */
+  let u = currentUser;
+  if(isAdmin() && el('bWho')){
+    u = userById(el('bWho').value);
+    if(!u){ toast('Izberi uporabnika.'); return; }
+  }
   const qty = parseInt(el('bQty').value, 10);
   const until = el('bUntil').value;
   const note = el('bNote').value.trim();
   const av = availQty(item);
   if(!qty || qty<1 || qty>av){ toast('Količina mora biti med 1 in ' + av + '.'); return; }
   if(!until){ toast('Izberi datum vračila.'); return; }
-  const who = userDisplay(currentUser);
-  item.loans.push({ borrower:who, email:currentUser.email, borrowerId:currentUser.id, qty, from:todayISO(), until, note });
-  log.unshift({ type:'borrow', code:item.id, name:item.name, borrower:who, email:currentUser.email, borrowerId:currentUser.id, qty, until, time:new Date().toLocaleString('sl-SI') });
+  const who = userDisplay(u);
+  item.loans.push({ borrower:who, email:u.email, borrowerId:u.id, qty, from:todayISO(), until, note });
+  log.unshift({ type:'borrow', code:item.id, name:item.name, borrower:who, email:u.email, borrowerId:u.id, qty, until, time:new Date().toLocaleString('sl-SI') });
   saveData();
   closeModal();
   toast('Izposojeno: ' + qty + ' × ' + item.name + ' → ' + who);
@@ -1740,6 +1748,22 @@ function openReturnModal(id){
       '<button class="btn btn-accent btn-sm" style="align-self:flex-start" data-act="returnGroup" data-gid="' + esc(gid) + '">↩ Vrni celotno skupino</button>' +
     '</div>';
   }
+  /* vračilo vsega, kar je posamezen uporabnik izposodil (po vsem inventarju) */
+  const seen = new Set();
+  for(const l of item.loans){
+    const key = l.borrowerId || (l.email||'').toLowerCase() || l.borrower;
+    if(!key || seen.has(key)) continue;
+    seen.add(key);
+    if(!canReturn(l)) continue;
+    const all = loansByBorrowerRef(l);
+    const itemCount = new Set(all.map(s=>s.item.id)).size;
+    if(itemCount < 2) continue;                 // smiselno le, če ima izposojeno več predmetov
+    const totalQty = all.reduce((s,x)=>s+x.loan.qty, 0);
+    h += '<div class="loanrow" style="margin-bottom:8px;border-color:var(--pine);background:#EEF3EC;flex-direction:column;align-items:stretch;gap:8px">' +
+      '<div><b>Vse, kar je ' + esc(l.borrower) + ' izposodil(a)</b>: ' + itemCount + ' predmetov, ' + totalQty + ' kosov</div>' +
+      '<button class="btn btn-accent btn-sm" style="align-self:flex-start" data-act="returnAllUser" data-id="' + esc(item.id) + '" data-bid="' + esc(l.borrowerId||'') + '" data-bemail="' + esc(l.email||'') + '">↩ Vrni vse od te osebe</button>' +
+    '</div>';
+  }
   if(!anyMine && !isAdmin()){
     h += '<div class="hint" style="color:var(--alert)">Te opreme nimaš izposojene, zato je ne moreš vrniti.</div>';
   }
@@ -1751,6 +1775,36 @@ function loansByGid(gid){
   const out = [];
   for(const it of inventory) for(const l of (it.loans||[])) if(l.gid === gid) out.push({ item:it, loan:l });
   return out;
+}
+/* vse odprte izposoje istega izposojevalca po vsem inventarju (ujemanje po id ali e-mailu) */
+function loansByBorrowerRef(ref){
+  const bid = ref.borrowerId || '';
+  const email = (ref.email || '').toLowerCase();
+  const out = [];
+  for(const it of inventory) for(const l of (it.loans||[])){
+    if((bid && l.borrowerId === bid) || (email && (l.email||'').toLowerCase() === email)) out.push({ item:it, loan:l });
+  }
+  return out;
+}
+/* vrne vse, kar je posamezen uporabnik izposodil (po vsem inventarju), naenkrat */
+function returnAllForUser(bid, email){
+  const ref = { borrowerId:bid, email:email };
+  const all = loansByBorrowerRef(ref);
+  if(!all.length){ toast('Ta oseba nima odprtih izposoj.'); return; }
+  if(!canReturn(ref)){ toast('To lahko stori le ta oseba ali gospodar opreme.'); return; }
+  const rgid = 'R' + Date.now();
+  const time = new Date().toLocaleString('sl-SI');
+  const who = all[0].loan.borrower;
+  for(const { item, loan } of all){
+    log.unshift({ type:'return', code:item.id, name:item.name, borrower:loan.borrower, email:loan.email, borrowerId:loan.borrowerId, qty:loan.qty, time, gid:rgid });
+  }
+  for(const it of inventory) it.loans = (it.loans||[]).filter(l =>
+    !((bid && l.borrowerId === bid) || (email && (l.email||'').toLowerCase() === email.toLowerCase())));
+  const n = new Set(all.map(s=>s.item.id)).size;
+  saveData();
+  closeModal();
+  toast('Vrnjeno vse od osebe ' + who + ': ' + n + ' predmetov.');
+  refreshCurrent();
 }
 function submitReturn(id, idx){
   const item = itemByCode(id);
@@ -1807,7 +1861,9 @@ function renderCart(m){
       '<div class="cart-side">' +
         '<div id="cartBasket"></div>' +
         '<div class="field"><label>Izposoja se na</label>' +
-          '<div class="whobox">' + whoUserHTML(currentUser) + '</div></div>' +
+          (isAdmin()
+            ? '<select id="cWho">' + userOptions(currentUser?currentUser.id:'') + '</select>'
+            : '<div class="whobox">' + whoUserHTML(currentUser) + '</div>') + '</div>' +
         '<div class="field"><label>Vrni do</label><input id="cUntil" type="date" value="' + plusDaysISO(14) + '">' +
           '<div class="duechips">' +
             '<button type="button" class="chip chip-sm" data-act="cartDue" data-days="7">+7 dni</button>' +
@@ -1815,7 +1871,7 @@ function renderCart(m){
             '<button type="button" class="chip chip-sm" data-act="cartDue" data-days="30">+30 dni</button>' +
           '</div></div>' +
         '<div class="field"><label>Opomba (neobvezno)</label><input id="cNote"></div>' +
-        '<button class="btn btn-accent btn-block" data-act="cartSubmit">↗ Izposodi vse</button>' +
+        '<button class="btn btn-accent btn-block" data-act="cartSubmit">↗ Izposodi vse iz košarice</button>' +
       '</div>' +
     '</div>';
   renderCartResults();
@@ -1904,6 +1960,11 @@ function cartSetQty(code, val){           // ob tipkanju posodobi stanje brez po
 function submitCartLoan(){
   if(!cart.length){ toast('Košarica je prazna.'); return; }
   if(!currentUser){ toast('Najprej se prijavi.'); return; }
+  let u = currentUser;
+  if(isAdmin() && el('cWho')){
+    u = userById(el('cWho').value);
+    if(!u){ toast('Izberi uporabnika.'); el('cWho').focus(); return; }
+  }
   const until = el('cUntil').value;
   const note = el('cNote').value.trim();
   if(!until){ toast('Izberi datum vračila.'); return; }
@@ -1915,13 +1976,13 @@ function submitCartLoan(){
       toast('Za ' + item.name + ' je na voljo le ' + availQty(item) + ' kosov.'); return;
     }
   }
-  const who = userDisplay(currentUser);
+  const who = userDisplay(u);
   const gid = 'L' + Date.now();
   const time = new Date().toLocaleString('sl-SI');
   for(const c of cart){
     const item = itemByCode(c.code);
-    item.loans.push({ borrower:who, email:currentUser.email, borrowerId:currentUser.id, qty:c.qty, from:todayISO(), until, note, gid });
-    log.unshift({ type:'borrow', code:item.id, name:item.name, borrower:who, email:currentUser.email, borrowerId:currentUser.id, qty:c.qty, until, time, gid });
+    item.loans.push({ borrower:who, email:u.email, borrowerId:u.id, qty:c.qty, from:todayISO(), until, note, gid });
+    log.unshift({ type:'borrow', code:item.id, name:item.name, borrower:who, email:u.email, borrowerId:u.id, qty:c.qty, until, time, gid });
   }
   const n = cart.length;
   cart = [];
@@ -3001,6 +3062,7 @@ const ACTIONS = {
   return:     b=>openReturnModal(b.dataset.id),
   returnSave: b=>submitReturn(b.dataset.id, parseInt(b.dataset.idx,10)),
   returnGroup:b=>returnGroup(b.dataset.gid),
+  returnAllUser: b=>returnAllForUser(b.dataset.bid, b.dataset.bemail),
   /* skupinska izposoja (košarica) */
   cartAdd:    b=>cartAdd(b.dataset.code),
   cartRemove: b=>cartRemove(b.dataset.code),
