@@ -6,7 +6,6 @@
 <title>RMT Inventura</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 /* =====================================================
    RMT INVENTURA — slog
@@ -300,19 +299,6 @@ tr.rowlink:hover td{background:#F1EDDD}
 .swatch.sel{outline:2px solid var(--ink);outline-offset:1px}
 .swatch-none{background:#fff;color:var(--ink-soft);font-size:12px;line-height:21px;text-align:center}
 
-/* ---------- skeniranje ---------- */
-.scanbox{max-width:580px}
-.scaninput{
-  width:100%;font-family:var(--mono);font-size:20px;padding:14px 16px;border:2px solid var(--pine);
-  border-radius:var(--r);background:#fff;letter-spacing:.05em;
-}
-.scaninput:focus{outline:3px solid rgba(62,107,77,.3)}
-.scanresult{margin-top:20px}
-.scanerr{
-  margin-top:20px;background:#F2DCD3;border:1px solid var(--alert);color:var(--alert);
-  border-radius:var(--r);padding:14px 16px;font-weight:600;
-}
-
 /* ---------- kartica predmeta ("našit obliž") ---------- */
 .itemcard{
   position:relative;background:var(--card);border:1px solid var(--line);
@@ -427,19 +413,6 @@ tr.rowlink:hover td{background:#F1EDDD}
 .frow-btns .frow-x{color:var(--alert);font-size:18px;font-weight:bold}
 .frow-opts{width:100%;margin-top:7px;padding:6px 9px;border:1px dashed var(--line);border-radius:5px;font-size:12.5px}
 .typehelp{font-size:12px;color:var(--ink-soft);background:var(--line-soft);border-radius:6px;padding:7px 10px;margin-bottom:10px;line-height:1.6}
-
-/* ---------- QR nalepke ---------- */
-.qrgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:12px}
-.qrpick{
-  background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px;
-  display:flex;gap:9px;align-items:flex-start;font-size:13px;cursor:pointer;
-}
-.qrpick:hover{border-color:var(--moss)}
-.qrpick input{margin-top:3px;accent-color:var(--pine)}
-.qrcat-h{
-  margin:22px 0 10px;font-family:var(--display);font-size:15px;font-weight:700;color:var(--pine);
-  border-bottom:1px solid var(--line);padding-bottom:5px;
-}
 
 /* ---------- dnevnik ---------- */
 .log-borrow{color:var(--ember);font-weight:700;white-space:nowrap}
@@ -764,7 +737,7 @@ function applyRemoteState(d){
   if(el('calPop') && el('calPop').classList.contains('on')) renderCalPop();
   const v = activeNav;
   if(v==='cart'){ renderCartFilters(); renderCartResults(); renderCartBasket(); }
-  else if(v!=='scan'){ switchView(v); }        // skeniranje pustimo pri miru
+  else { switchView(v); }
   toast('Podatki posodobljeni.');
 }
 /* ko se okno zapre, uveljavi morebitno odloženo posodobitev s strežnika */
@@ -870,7 +843,7 @@ let log        = [];
 let users      = [];
 
 let currentUser = null;
-let activeNav   = 'scan';
+let activeNav   = 'all';
 let browseState = { cat:null, subcat:null, q:'' };      // pogled posamezne kategorije
 let allFilter   = { cat:null, status:null, q:'' };      // pogled Vsa oprema
 let logFilter   = { type:'', q:'' };                    // dnevnik
@@ -1288,7 +1261,7 @@ function enterApp(){
   el('userRole').textContent = isAdmin() ? 'admin' : 'uporabnik';
   buildSidebar();
   updateFab();
-  switchView('scan');
+  switchView('all');
 }
 
 /* =====================================================================
@@ -1303,14 +1276,12 @@ function closeSidebarMobile(){ toggleSidebar(false); }
 function buildSidebar(){
   let h = '<div class="snav">';
   h += '<div class="snav-label">Delo</div>';
-  h += navBtn('scan','📷','Skeniraj');
   h += navBtn('cart','🛒','Izposoja', cart.length || null);
   h += navBtn('browse','📦','Pregled opreme');
   h += navBtn('all','🗂️','Vsa oprema');
   if(isAdmin()){
     h += '<div class="snav-label">Gospodar</div>';
     h += navBtn('log','📋','Dnevnik');
-    h += navBtn('qr','🏷️','QR nalepke');
     h += navBtn('excel','⬇️','Excel izvoz');
     h += navBtn('backup','💾','Varnostna kopija');
     h += navBtn('users','👥','Uporabniki');
@@ -1340,7 +1311,7 @@ function gotoCat(catId){
   switchView('browse');
 }
 function switchView(v){
-  if(!isAdmin() && ['log','qr','excel','cats','backup','users'].includes(v)) v = 'scan';
+  if(!isAdmin() && ['log','excel','cats','backup','users'].includes(v)) v = 'all';
   if(v !== activeNav) tableSort = { key:null, dir:1 };   // nova vsebina -> ponastavi razvrščanje
   activeNav = v;
   if(v !== 'browse') browseState = { cat:null, subcat:null, q:'' };
@@ -1348,58 +1319,26 @@ function switchView(v){
   buildSidebar();
   updateFab();
   const m = el('main');
-  if(v==='scan')   renderScan(m);
   if(v==='cart')   renderCart(m);
   if(v==='browse') renderBrowse(m);
   if(v==='all')    renderAll(m);
   if(v==='log')    renderLog(m);
-  if(v==='qr')     renderQR(m);
   if(v==='excel')  renderExcel(m);
   if(v==='backup') renderBackup(m);
   if(v==='users')  renderUsers(m);
   if(v==='cats')   renderCats(m);
 }
-/* po izposoji/vračilu osveži trenutni pogled (in skenirano kartico) */
+/* po izposoji/vračilu osveži trenutni pogled */
 function refreshCurrent(code){
   buildSidebar();
   updateFab();
-  if(activeNav==='scan'){
-    const inp = el('scanInput');
-    if(inp && code){ inp.value = code; handleScan(code); }
-  } else {
-    switchView(activeNav);
-  }
+  switchView(activeNav);
 }
 
 /* =====================================================================
-   8. POGLEDI: SKENIRANJE, PREGLED, VSA OPREMA
+   8. POGLEDI: PREGLED, VSA OPREMA
 ===================================================================== */
-function renderScan(m){
-  m.innerHTML =
-    '<h2 class="view-title">Skeniraj predmet</h2>' +
-    '<div class="view-sub">Skeniraj QR/črtno kodo s skenerjem (USB ali Bluetooth) ali vpiši kodo in pritisni Enter.</div>' +
-    '<div class="scanbox">' +
-      '<input class="scaninput" id="scanInput" placeholder="npr. SOT-001" autocomplete="off">' +
-      '<div id="scanResult" class="scanresult"></div>' +
-    '</div>';
-  const inp = el('scanInput');
-  inp.addEventListener('keydown', e=>{
-    if(e.key==='Enter'){ handleScan(inp.value); inp.select(); }
-  });
-  inp.focus();
-}
-function handleScan(code){
-  const box = el('scanResult');
-  if(!code.trim()){ box.innerHTML=''; return; }
-  const item = itemByCode(code);
-  if(!item){
-    box.innerHTML = '<div class="scanerr">Koda <span class="tag">' + esc(code.trim().toUpperCase()) + '</span> ne obstaja v inventarju.</div>';
-    return;
-  }
-  box.innerHTML = itemCardHTML(item, 'scan');
-}
-
-/* kartica predmeta (skeniranje in podrobnosti) */
+/* kartica predmeta (podrobnosti predmeta) */
 function itemCardHTML(item, ctx){
   const cat = catById(item.cat);
   const st = itemStatus(item);
@@ -2306,7 +2245,7 @@ function updateFab(){
 }
 
 /* =====================================================================
-   12. DNEVNIK, EXCEL IZVOZ, QR NALEPKE, VARNOSTNA KOPIJA (admin)
+   12. DNEVNIK, EXCEL IZVOZ, VARNOSTNA KOPIJA (admin)
 ===================================================================== */
 function logFiltered(){
   const q = logFilter.q.trim().toLowerCase();
@@ -2479,73 +2418,6 @@ function exportExcel(){
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(userRows.length?userRows:[{'Info':'Ni uporabnikov'}]), 'Uporabniki');
   XLSX.writeFile(wb, 'RMT_inventura_' + todayISO() + '.xlsx');
   toast('Excel datoteka prenesena.');
-}
-
-/* ---------- QR nalepke ---------- */
-function renderQR(m){
-  let h = '<h2 class="view-title">QR nalepke</h2>' +
-    '<div class="view-sub">Označi predmete in natisni nalepke. Vsaka vsebuje QR kodo, kodo predmeta, ime, kategorijo in podkategorijo.</div>' +
-    '<div class="toolrow">' +
-      '<button class="btn btn-ghost btn-sm" data-act="qrAll" data-on="1">Označi vse</button>' +
-      '<button class="btn btn-ghost btn-sm" data-act="qrAll" data-on="0">Odznači vse</button>' +
-      '<button class="btn btn-primary" data-act="qrPrint">🖨 Natisni izbrane</button>' +
-    '</div>';
-  for(const c of categories){
-    const items = inventory.filter(i=>i.cat===c.id);
-    if(!items.length) continue;
-    h += '<div class="qrcat-h">' + esc(c.icon) + ' ' + esc(c.name) + '</div><div class="qrgrid">';
-    for(const i of items){
-      h += '<label class="qrpick"><input type="checkbox" class="qrchk" value="' + esc(i.id) + '">' +
-        '<span><span class="tag">' + esc(i.id) + '</span><br>' + esc(i.name) + '</span></label>';
-    }
-    h += '</div>';
-  }
-  m.innerHTML = h;
-}
-function qrSelectAll(on){
-  document.querySelectorAll('.qrchk').forEach(c=>c.checked=on);
-}
-/* tisk v novem oknu; podatki vstavljeni izključno prek textContent (varno pred XSS) */
-function printLabels(){
-  const codes = Array.from(document.querySelectorAll('.qrchk:checked')).map(c=>c.value);
-  if(!codes.length){ toast('Označi vsaj en predmet.'); return; }
-  const items = codes.map(itemByCode).filter(Boolean).map(i=>{
-    const c = catById(i.cat);
-    return { id:i.id, name:i.name, cat:(c?c.icon+' '+c.name:''), sub:i.subcat||'' };
-  });
-  const w = window.open('', '_blank');
-  if(!w){ toast('Brskalnik je blokiral novo okno.'); return; }
-  w.document.write('<!DOCTYPE html><html lang="sl"><head><meta charset="UTF-8"><title>QR nalepke — RMT Inventura</title>' +
-    '<scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/scr' + 'ipt>' +
-    '<style>' +
-    'body{font-family:Arial,sans-serif;margin:14px;display:flex;flex-wrap:wrap;gap:8px}' +
-    '.lbl{border:1.5px dashed #20402F;border-radius:6px;padding:8px;width:182px;page-break-inside:avoid;display:flex;gap:8px;align-items:center}' +
-    '.lbl .qr{flex-shrink:0}' +
-    '.lbl .tx{font-size:10.5px;line-height:1.35}' +
-    '.lbl .code{font-family:monospace;font-weight:bold;font-size:12px}' +
-    '.lbl .nm{font-weight:bold;font-size:11.5px;margin:2px 0}' +
-    '@media print{body{margin:4mm}}' +
-    '</style></head><body></body></html>');
-  w.document.close();
-  w.addEventListener('load', ()=>{
-    for(const it of items){
-      const d = w.document.createElement('div');
-      d.className = 'lbl';
-      const qr = w.document.createElement('div');
-      qr.className = 'qr';
-      const tx = w.document.createElement('div');
-      tx.className = 'tx';
-      const codeEl = w.document.createElement('div'); codeEl.className='code'; codeEl.textContent = it.id;
-      const nmEl = w.document.createElement('div'); nmEl.className='nm'; nmEl.textContent = it.name;
-      const catEl = w.document.createElement('div'); catEl.textContent = it.cat + (it.sub?' › '+it.sub:'');
-      tx.appendChild(codeEl); tx.appendChild(nmEl); tx.appendChild(catEl);
-      d.appendChild(qr); d.appendChild(tx);
-      w.document.body.appendChild(d);
-      try{ new w.QRCode(qr, { text: it.id, width: 64, height: 64 }); }
-      catch(e){ qr.textContent = '[QR]'; }
-    }
-    setTimeout(()=>w.print(), 400);
-  });
 }
 
 /* ---------- varnostna kopija (JSON izvoz/obnova) ---------- */
@@ -3200,9 +3072,7 @@ const ACTIONS = {
   calDay:     b=>selectCalDay(b.dataset.iso),
   calDayClose:()=>selectCalDay(null),
   calItem:    b=>{ closeCalPop(); showItemDetail(b.dataset.id); },
-  /* QR, Excel, kopija, dnevnik */
-  qrAll:      b=>qrSelectAll(b.dataset.on==='1'),
-  qrPrint:    ()=>printLabels(),
+  /* Excel, kopija, dnevnik */
   excel:      ()=>exportExcel(),
   backupExport: ()=>exportJSON(),
   backupPick: ()=>{ const f = el('importFile'); if(f) f.click(); },
