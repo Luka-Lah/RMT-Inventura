@@ -710,10 +710,70 @@ async function afterAuth(){
   if(el('loginErr2')) el('loginErr2').textContent = '';
   el('loginPass').value = '';
   enterApp();
+  startRealtime();
 }
 /* razumljivo sporočilo iz napake Supabase */
 function sbErr(error, fallback){
   return (error && error.message) ? error.message : fallback;
+}
+
+/* =====================================================================
+   SPROTNO OSVEŽEVANJE (Supabase Realtime)
+   Naročimo se na spremembe skupnega zapisa appstate. Ko ga kdo posodobi,
+   ostali takoj dobijo novo stanje in osvežijo prikaz. Osveževanje se odloži,
+   dokler je odprto okno (izposoja, urejanje, potrditev), da ne povozi vnosa.
+===================================================================== */
+let rtChannel = null;
+let pendingRemote = null;
+
+function uiBusy(){
+  return (el('modalWrap')   && el('modalWrap').classList.contains('on')) ||
+         (el('confirmWrap') && el('confirmWrap').classList.contains('on'));
+}
+function startRealtime(){
+  if(!sb || rtChannel) return;
+  try{
+    rtChannel = sb.channel('rmt-appstate')
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'appstate' }, payload=>{
+        const d = payload && payload.new && payload.new.data;
+        if(!d) return;
+        /* preskoči lasten zapis (vsebina je enaka trenutni) */
+        try{
+          if(JSON.stringify({ categories, inventory, log }) ===
+             JSON.stringify({ categories:d.categories, inventory:d.inventory, log:d.log })) return;
+        }catch(_e){}
+        if(uiBusy()){ pendingRemote = d; return; }   // ne moti odprtega okna
+        applyRemoteState(d);
+      })
+      .subscribe();
+  }catch(e){ console.error('Realtime ni na voljo', e); }
+}
+function stopRealtime(){
+  if(sb && rtChannel){ try{ sb.removeChannel(rtChannel); }catch(_e){} }
+  rtChannel = null;
+  pendingRemote = null;
+}
+/* vnese novo stanje s strežnika in osveži prikaz brez ponovnega zapisa nazaj */
+function applyRemoteState(d){
+  if(!d) return;
+  if(Array.isArray(d.categories)) categories = d.categories;
+  if(Array.isArray(d.inventory))  inventory  = d.inventory;
+  if(Array.isArray(d.log))        log        = d.log;
+  buildSidebar();
+  updateFab();
+  if(el('calPop') && el('calPop').classList.contains('on')) renderCalPop();
+  const v = activeNav;
+  if(v==='cart'){ renderCartFilters(); renderCartResults(); renderCartBasket(); }
+  else if(v!=='scan'){ switchView(v); }        // skeniranje pustimo pri miru
+  toast('Podatki posodobljeni.');
+}
+/* ko se okno zapre, uveljavi morebitno odloženo posodobitev s strežnika */
+function flushPendingRemote(){
+  if(pendingRemote && !uiBusy()){
+    const d = pendingRemote;
+    pendingRemote = null;
+    applyRemoteState(d);
+  }
 }
 
 
@@ -1213,6 +1273,7 @@ async function doRegister(){
   await afterAuth();
 }
 async function doLogout(){
+  stopRealtime();
   if(sb) await sb.auth.signOut();
   currentUser = null;
   el('app').classList.remove('on');
@@ -1846,6 +1907,8 @@ function returnGroup(gid){
    vsak predmet dobi svojo izposojo z isto oznako skupine (gid), enako
    pa velja za dnevniške zapise — tako je vse zabeleženo kot ena izposoja. */
 let cartQ = '';                          // iskalni niz v izbirniku predmetov
+let cartCat = null;                      // filter kategorije v pogledu Izposoja
+let cartSub = null;                      // filter podkategorije
 function cartLine(code){ return cart.find(c=>c.code===code); }
 function cartItemCount(){ return cart.reduce((s,c)=>s+c.qty, 0); }
 
@@ -1855,6 +1918,7 @@ function renderCart(m){
     '<div class="view-sub">Dodaj več predmetov v košarico in jih izposodi naenkrat — vse se zabeleži kot ena izposoja nate, z istim rokom.</div>' +
     '<div class="cart-cols">' +
       '<div class="cart-pick">' +
+        '<div id="cartFilters"></div>' +
         '<div class="toolrow"><input type="search" id="cartSearch" data-input="cartSearch" placeholder="Išči predmet za dodajanje …" value="' + esc(cartQ) + '"></div>' +
         '<div class="cart-list" id="cartResults"></div>' +
       '</div>' +
@@ -1874,17 +1938,54 @@ function renderCart(m){
         '<button class="btn btn-accent btn-block" data-act="cartSubmit">↗ Izposodi vse iz košarice</button>' +
       '</div>' +
     '</div>';
+  renderCartFilters();
   renderCartResults();
   renderCartBasket();
+}
+/* filtri po kategoriji in podkategoriji v pogledu Izposoja; štejejo se le
+   razpoložljivi predmeti (availQty > 0). Posodablja samo svoj vsebnik, da ne
+   ponastavi izbire uporabnika/roka na desni. */
+function renderCartFilters(){
+  const host = el('cartFilters');
+  if(!host) return;
+  const avail = inventory.filter(i => availQty(i) > 0);
+  let h = '<div class="chips"><span class="chips-label">Kategorija</span>' +
+    '<button class="chip chip-sm' + (!cartCat?' active':'') + '" data-act="cartCat">Vse' +
+      '<span class="cnt">' + avail.length + '</span></button>';
+  for(const c of categories){
+    const cnt = avail.filter(i=>i.cat===c.id).length;
+    if(!cnt) continue;
+    h += '<button class="chip chip-sm' + (cartCat===c.id?' active':'') + '" data-act="cartCat" data-id="' + esc(c.id) + '">' +
+      esc(c.icon) + ' ' + esc(c.name) + '<span class="cnt">' + cnt + '</span></button>';
+  }
+  h += '</div>';
+  if(cartCat){
+    const c = catById(cartCat);
+    const subs = (c && Array.isArray(c.subcats)) ? c.subcats : [];
+    const withItems = subs.filter(s => avail.some(i => i.cat===cartCat && i.subcat===s));
+    if(withItems.length){
+      h += '<div class="chips" style="margin-top:-4px"><span class="chips-label">Podkategorija</span>' +
+        '<button class="chip chip-sm' + (!cartSub?' active':'') + '" data-act="cartSub">Vse</button>';
+      for(const s of withItems){
+        const cnt = avail.filter(i => i.cat===cartCat && i.subcat===s).length;
+        h += '<button class="chip chip-sm' + (cartSub===s?' active':'') + '" data-act="cartSub" data-sub="' + esc(s) + '">' +
+          esc(s) + '<span class="cnt">' + cnt + '</span></button>';
+      }
+      h += '</div>';
+    }
+  }
+  host.innerHTML = h;
 }
 function renderCartResults(){
   const host = el('cartResults');
   if(!host) return;
   const q = cartQ.trim().toLowerCase();
   const avail = inventory.filter(i => availQty(i) > 0 &&
+    (!cartCat || i.cat === cartCat) &&
+    (!cartSub || i.subcat === cartSub) &&
     (!q || i.name.toLowerCase().includes(q) || String(i.id).toLowerCase().includes(q)));
   if(!avail.length){
-    host.innerHTML = '<div class="empty">' + (q ? 'Noben predmet ne ustreza iskanju.' : 'Trenutno ni razpoložljivih predmetov.') + '</div>';
+    host.innerHTML = '<div class="empty">' + (q || cartCat ? 'Noben razpoložljiv predmet ne ustreza filtru.' : 'Trenutno ni razpoložljivih predmetov.') + '</div>';
     return;
   }
   let h = '';
@@ -2233,6 +2334,16 @@ function renderLog(m){
     '</div><div id="tableHost">' + logTableHTML(rows) + '</div>';
   m.innerHTML = h;
 }
+/* gumb za vračilo v dnevniku: prikaže se le, če je predmet še izposojen in
+   ga prijavljeni lahko vrne (admin ali izposojevalec) */
+function logReturnCell(code, va){
+  const item = itemByCode(code);
+  const style = va ? ' style="vertical-align:top"' : '';
+  if(item && borrowedQty(item) > 0 && (isAdmin() || (item.loans||[]).some(canReturn))){
+    return '<td' + style + '><button class="btn btn-primary btn-sm" data-act="return" data-id="' + esc(code) + '">↩ Vrni</button></td>';
+  }
+  return '<td' + style + '></td>';
+}
 function logTableHTML(rows){
   if(!log.length)  return '<div class="tablewrap"><div class="empty">Dnevnik je prazen.</div></div>';
   if(!rows.length) return '<div class="tablewrap"><div class="empty">Noben zapis ne ustreza filtru.</div></div>';
@@ -2256,7 +2367,7 @@ function logTableHTML(rows){
     }
   }
   let h = '<div class="tablewrap"><table><thead><tr>' +
-    '<th>Čas</th><th>Dogodek</th><th>Predmet</th><th>Koda</th><th>Oseba</th><th>Kol.</th><th>Vrni do</th>' +
+    '<th>Čas</th><th>Dogodek</th><th>Predmet</th><th>Koda</th><th>Oseba</th><th>Kol.</th><th>Vrni do</th><th></th>' +
     '</tr></thead><tbody>';
   for(const u of units){
     if(u.group && u.items.length > 1){
@@ -2265,6 +2376,9 @@ function logTableHTML(rows){
       const codes = u.items.map(it=>'<span class="tag">' + esc(it.code) + '</span>').join('<br>');
       const qtys  = u.items.map(it=>it.qty).join('<br>');
       const isB = u.type==='borrow';
+      /* pri skupinski izposoji odpremo vračilo prvega predmeta, ki je še izposojen */
+      let retCode = '';
+      if(isB){ const f = u.items.find(it=>{ const x=itemByCode(it.code); return x && borrowedQty(x)>0; }); if(f) retCode = f.code; }
       h += '<tr class="log-grouprow">' +
         '<td style="white-space:nowrap;font-size:13px;vertical-align:top">' + esc(u.time) + '</td>' +
         '<td style="vertical-align:top">' +
@@ -2277,6 +2391,7 @@ function logTableHTML(rows){
           '<br><small style="color:var(--ink-soft)">' + u.items.length + ' predmetov · ' + total + ' kosov</small></td>' +
         '<td class="qtycell" style="vertical-align:top;line-height:1.9">' + qtys + '</td>' +
         '<td style="vertical-align:top">' + (isB ? fmtDate(u.until) : '—') + '</td>' +
+        (isB ? logReturnCell(retCode, true) : '<td style="vertical-align:top"></td>') +
       '</tr>';
     } else {
       const e = u.group ? { type:u.type, time:u.time, name:u.items[0].name, code:u.items[0].code,
@@ -2289,6 +2404,7 @@ function logTableHTML(rows){
         '<td>' + whoHTML(e) + '</td>' +
         '<td class="qtycell">' + e.qty + '</td>' +
         '<td>' + (e.type==='borrow'?fmtDate(e.until):'—') + '</td>' +
+        (e.type==='borrow' ? logReturnCell(e.code, false) : '<td></td>') +
       '</tr>';
     }
   }
@@ -2993,6 +3109,7 @@ function openModal(html){
 function closeModal(){
   el('modalWrap').classList.remove('on');
   el('modalBox').innerHTML = '';
+  flushPendingRemote();
 }
 /* lepo potrditveno okno; besedilo gre prek textContent (varno pred XSS) */
 function confirmDialog(msg, cb, btnLabel){
@@ -3004,6 +3121,7 @@ function confirmDialog(msg, cb, btnLabel){
 function closeConfirm(){
   el('confirmWrap').classList.remove('on');
   confirmCb = null;
+  flushPendingRemote();
 }
 function confirmYes(){
   const cb = confirmCb;
@@ -3069,6 +3187,8 @@ const ACTIONS = {
   cartStep:   b=>cartStep(b.dataset.code, parseInt(b.dataset.d,10)),
   cartDue:    b=>{ const i = el('cUntil'); if(i) i.value = plusDaysISO(parseInt(b.dataset.days,10)); },
   cartSubmit: ()=>submitCartLoan(),
+  cartCat:    b=>{ cartCat = b.dataset.id || null; cartSub = null; renderCartFilters(); renderCartResults(); },
+  cartSub:    b=>{ cartSub = b.dataset.sub || null; renderCartFilters(); renderCartResults(); },
   /* večizbirni stolpci */
   multiField: b=>openMultiField(b.dataset.id, b.dataset.fid),
   multiSave:  b=>saveMultiField(b.dataset.id, b.dataset.fid),
