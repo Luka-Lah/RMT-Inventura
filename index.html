@@ -537,6 +537,56 @@ tr.rowlink:hover td{background:#F1EDDD}
 @media (prefers-reduced-motion:reduce){
   *{transition:none !important}
 }
+
+/* ---------- Finančnik ---------- */
+.fin-sum{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.fin-tile{flex:1;min-width:148px;background:var(--card);border:1px solid var(--line);
+  border-top:3px solid var(--moss);border-radius:var(--r-lg);padding:13px 16px;box-shadow:var(--shadow-sm)}
+.fin-tile .lbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.fin-tile .amt{display:block;margin-top:5px;font-family:var(--mono);font-size:23px;font-weight:600;
+  font-variant-numeric:tabular-nums;line-height:1.1;color:var(--pine)}
+.fin-tile .sub2{font-size:11.5px;color:var(--ink-soft);margin-top:3px}
+.fin-tile.t-buy{border-top-color:var(--pine)} .fin-tile.t-buy .amt{color:var(--pine)}
+.fin-tile.t-fix{border-top-color:var(--ember)} .fin-tile.t-fix .amt{color:var(--ember)}
+.fin-tile.t-plan{border-top-color:var(--gold)} .fin-tile.t-plan .amt{color:var(--wood)}
+.fin-tile.t-total{border-top-color:var(--wood)} .fin-tile.t-total .amt{color:var(--ink)}
+.fin-charts{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:8px}
+@media(max-width:760px){.fin-charts{grid-template-columns:1fr}}
+.fin-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:16px 18px;box-shadow:var(--shadow-sm)}
+.fin-card h3{font-family:var(--display);font-size:17px;color:var(--pine);margin-bottom:1px}
+.fin-card .hd-sub{font-size:12px;color:var(--ink-soft);margin-bottom:12px}
+.fin-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--ink-soft)}
+.fin-legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.fin-chart-empty{display:flex;align-items:center;justify-content:center;min-height:200px;color:var(--ink-soft);
+  font-size:13.5px;text-align:center;padding:0 12px}
+.fin-sec{margin-top:24px}
+.fin-sechd{display:flex;align-items:baseline;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.fin-sechd h3{font-family:var(--display);font-size:18px;color:var(--pine)}
+.fin-sechd .tot{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--ink-soft);font-size:13px}
+.fin-sechd .btn{margin-left:auto}
+.fin-amt{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+td.fin-amt{font-weight:600;color:var(--pine)}
+.pri{display:inline-block;font-size:11px;font-weight:700;padding:1px 9px;border-radius:999px;letter-spacing:.03em}
+.pri-high{background:#F1D6C8;color:var(--alert)}
+.pri-med{background:#F4E6C6;color:var(--wood)}
+.pri-low{background:#DCE7D6;color:var(--ok)}
+.fin-actcell{display:flex;gap:6px;justify-content:flex-end;white-space:nowrap}
+.fin-empty{padding:22px;text-align:center;color:var(--ink-soft);font-size:13.5px}
+.fin-monthnav{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+.fin-monthnav button.mbtn{width:34px;height:34px;border:1px solid var(--line);background:var(--card);
+  border-radius:8px;font-size:16px;color:var(--pine);box-shadow:var(--shadow-sm);display:flex;align-items:center;justify-content:center}
+.fin-monthnav .mlabel{font-family:var(--display);font-size:19px;color:var(--pine);text-transform:capitalize;min-width:168px;text-align:center}
+.fin-monthnav .today{margin-left:4px;font-size:12.5px;color:var(--ember);background:none;border:none;cursor:pointer;text-decoration:underline}
+.bgt-row{display:grid;grid-template-columns:140px 1fr 180px;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--line-soft)}
+.bgt-row:last-child{border-bottom:none}
+.bgt-name{font-weight:600;color:var(--ink)}
+.bgt-bar{height:12px;background:var(--line-soft);border-radius:999px;overflow:hidden}
+.bgt-bar i{display:block;height:100%;border-radius:999px;transition:width .3s}
+.bgt-fig{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;font-size:13px;white-space:nowrap}
+.bgt-fig b{color:var(--pine)} .bgt-fig span{color:var(--ink-soft);font-weight:400}
+.bgt-fig.over b{color:var(--alert)}
+@media(max-width:620px){.bgt-row{grid-template-columns:1fr;gap:5px}.bgt-fig{text-align:left}}
 </style>
 </head>
 <body>
@@ -662,13 +712,15 @@ async function dbLoadState(){
     categories = data.data.categories;
     inventory  = Array.isArray(data.data.inventory) ? data.data.inventory : [];
     log        = Array.isArray(data.data.log) ? data.data.log : [];
+    finance    = normalizeFinance(data.data.finance);
     migrateData();
   } else {
     categories = JSON.parse(JSON.stringify(DEFAULT_CATEGORIES));
     inventory  = JSON.parse(JSON.stringify(DEFAULT_INVENTORY));
     log = [];
+    finance = normalizeFinance(null);
     migrateData();
-    await sb.from('appstate').upsert({ id:1, data:{ categories, inventory, log } });
+    await sb.from('appstate').upsert({ id:1, data:{ categories, inventory, log, finance } });
   }
 }
 async function afterAuth(){
@@ -711,8 +763,8 @@ function startRealtime(){
         if(!d) return;
         /* preskoči lasten zapis (vsebina je enaka trenutni) */
         try{
-          if(JSON.stringify({ categories, inventory, log }) ===
-             JSON.stringify({ categories:d.categories, inventory:d.inventory, log:d.log })) return;
+          if(JSON.stringify({ categories, inventory, log, finance }) ===
+             JSON.stringify({ categories:d.categories, inventory:d.inventory, log:d.log, finance:normalizeFinance(d.finance) })) return;
         }catch(_e){}
         if(uiBusy()){ pendingRemote = d; return; }   // ne moti odprtega okna
         applyRemoteState(d);
@@ -731,6 +783,7 @@ function applyRemoteState(d){
   if(Array.isArray(d.categories)) categories = d.categories;
   if(Array.isArray(d.inventory))  inventory  = d.inventory;
   if(Array.isArray(d.log))        log        = d.log;
+  finance = normalizeFinance(d.finance);
   buildSidebar();
   updateFab();
   if(el('calPop') && el('calPop').classList.contains('on')) renderCalPop();
@@ -840,6 +893,7 @@ let categories = [];
 let inventory  = [];
 let log        = [];
 let users      = [];
+let finance    = { purchases:[], repairs:[], wishlist:[] };  // finančnik: nakupi, popravila, nakupni seznam
 
 let currentUser = null;
 let activeNav   = 'all';
@@ -865,7 +919,7 @@ function saveData(){
 }
 async function persistNow(){
   if(!sb || !currentUser) return;
-  const { error } = await sb.from('appstate').upsert({ id:1, data:{ categories, inventory, log }, updated_at:new Date().toISOString() });
+  const { error } = await sb.from('appstate').upsert({ id:1, data:{ categories, inventory, log, finance }, updated_at:new Date().toISOString() });
   if(error){
     console.error('Shranjevanje na strežnik ni uspelo', error);
     try{ toast('Shranjevanje na strežnik ni uspelo.'); }catch(_e){}
@@ -1280,6 +1334,7 @@ function buildSidebar(){
   h += navBtn('all','🗂️','Vsa oprema');
   if(isAdmin()){
     h += '<div class="snav-label">Gospodar</div>';
+    h += navBtn('finance','💰','Finančnik');
     h += navBtn('log','📋','Dnevnik');
     h += navBtn('excel','⬇️','Excel izvoz');
     h += navBtn('backup','💾','Varnostna kopija');
@@ -1310,7 +1365,7 @@ function gotoCat(catId){
   switchView('browse');
 }
 function switchView(v){
-  if(!isAdmin() && ['log','excel','cats','backup','users'].includes(v)) v = 'all';
+  if(!isAdmin() && ['log','excel','cats','backup','users','finance'].includes(v)) v = 'all';
   if(v !== activeNav) tableSort = { key:null, dir:1 };   // nova vsebina -> ponastavi razvrščanje
   activeNav = v;
   if(v !== 'browse') browseState = { cat:null, subcat:null, q:'' };
@@ -1326,6 +1381,7 @@ function switchView(v){
   if(v==='backup') renderBackup(m);
   if(v==='users')  renderUsers(m);
   if(v==='cats')   renderCats(m);
+  if(v==='finance')renderFinance(m);
 }
 /* po izposoji/vračilu osveži trenutni pogled */
 function refreshCurrent(code){
@@ -2613,7 +2669,7 @@ function exportJSON(){
     app: 'RMT Inventura',
     version: 2,
     exported: new Date().toISOString(),
-    categories, inventory, log, users
+    categories, inventory, log, finance, users
   };
   const json = JSON.stringify(data, null, 2);
   try{
@@ -2662,6 +2718,7 @@ function importJSONFile(file){
         categories = d.categories;
         inventory  = d.inventory;
         log        = newLog;
+        finance    = normalizeFinance(d.finance);
         migrateData();                    // stare kopije s šotorskim zapisom se migrirajo
         saveData();
         switchView('backup');
@@ -2669,6 +2726,404 @@ function importJSONFile(file){
       }, 'Obnovi');
   };
   reader.readAsText(file);
+}
+
+/* =====================================================================
+   12b. FINANČNIK (admin) — nakupi opreme, popravila, nakupni seznam
+   Podatki so v finance = { purchases, repairs, wishlist } znotraj appstate.
+   Zneski so skupni (ne na kos). Grafi so risani v SVG (brez zunanjih knjižnic).
+===================================================================== */
+const FIN_MON = ['jan','feb','mar','apr','maj','jun','jul','avg','sep','okt','nov','dec'];
+const FIN_MON_FULL = ['januar','februar','marec','april','maj','junij','julij','avgust','september','oktober','november','december'];
+const FIN_PRI = { high:{ label:'Nujno', cls:'pri-high', rank:0 },
+                  med: { label:'Srednje', cls:'pri-med', rank:1 },
+                  low: { label:'Lahko počaka', cls:'pri-low', rank:2 } };
+const FIN_PAL = ['var(--pine)','var(--ember)','var(--gold)','var(--moss)','var(--wood-light)','var(--alert)'];
+function finCatColor(i){ return FIN_PAL[i % FIN_PAL.length]; }
+function finMonthKey(d){ d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'); }
+let finMonth = finMonthKey();                       // izbrani mesec v finančniku (YYYY-MM)
+function finMonthLabel(key){ const p = key.split('-'); return FIN_MON_FULL[parseInt(p[1],10)-1] + ' ' + p[0]; }
+function finShiftMonth(delta){
+  const p = finMonth.split('-').map(Number);
+  finMonth = finMonthKey(new Date(p[0], p[1]-1+delta, 1));
+  if(activeNav==='finance') renderFinance(el('main'));
+}
+function finToday(){ finMonth = finMonthKey(); if(activeNav==='finance') renderFinance(el('main')); }
+function inFinMonth(e, key){ return (e.date||'').slice(0,7) === key; }
+function finCatLabel(id){ const c = catById(id); return c ? (c.icon + ' ' + c.name) : 'Nerazvrščeno'; }
+/* poraba (nakupi + popravila) po kategorijah za izbrani mesec; brez kategorije pod '_' */
+function finSpentByCat(key){
+  const map = {};
+  const add = list => { for(const e of (list||[])){ if(!inFinMonth(e,key)) continue; const k = e.cat || '_'; map[k] = (map[k]||0) + (Number(e.amount)||0); } };
+  add(finance.purchases); add(finance.repairs);
+  return map;
+}
+function finMonthSpent(key){ const m = finSpentByCat(key); let s = 0; for(const k in m) s += m[k]; return s; }
+function finBudgetTotal(){ let s = 0; for(const c of categories) s += Number(finance.budgets[c.id])||0; return s; }
+function normalizeFinance(f){
+  f = (f && typeof f === 'object') ? f : {};
+  return {
+    purchases: Array.isArray(f.purchases) ? f.purchases : [],
+    repairs:   Array.isArray(f.repairs)   ? f.repairs   : [],
+    wishlist:  Array.isArray(f.wishlist)  ? f.wishlist  : [],
+    budgets:   (f.budgets && typeof f.budgets === 'object') ? f.budgets : {}   // mesečni proračun na kategorijo
+  };
+}
+function finList(kind){
+  return kind==='purchase' ? finance.purchases : kind==='repair' ? finance.repairs : finance.wishlist;
+}
+function finUid(){ return 'F' + Date.now() + Math.random().toString(36).slice(2,7); }
+function finSum(list){ return (list||[]).reduce((s,e)=>s + (Number(e.amount)||0), 0); }
+function fmtEur(n){
+  n = Number(n) || 0;
+  try{ return n.toLocaleString('sl-SI', { style:'currency', currency:'EUR', minimumFractionDigits:2, maximumFractionDigits:2 }); }
+  catch(e){ return n.toFixed(2).replace('.', ',') + ' €'; }
+}
+function finShort(n){           // kompaktna oznaka za graf (npr. 1,2k)
+  n = Math.round(Number(n)||0);
+  return n >= 1000 ? (n/1000).toFixed(1).replace('.', ',') + 'k' : String(n);
+}
+function parseAmount(s){
+  if(typeof s === 'number') return s;
+  const v = parseFloat(String(s).replace(/\s/g, '').replace(',', '.'));
+  return isFinite(v) ? v : NaN;
+}
+
+/* poraba po mesecih (zadnjih 6 mesecev), ločeno nakupi/popravila */
+function finMonthly(){
+  const months = [];
+  const idx = {};
+  const now = new Date();
+  for(let k=5; k>=0; k--){
+    const d = new Date(now.getFullYear(), now.getMonth()-k, 1);
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    idx[key] = months.length;
+    months.push({ key, label: FIN_MON[d.getMonth()], buy:0, fix:0 });
+  }
+  const acc = (list, field) => { for(const e of (list||[])){ const k = (e.date||'').slice(0,7); if(k in idx) months[idx[k]][field] += Number(e.amount)||0; } };
+  acc(finance.purchases, 'buy');
+  acc(finance.repairs, 'fix');
+  return months;
+}
+function finBarChart(){
+  const data = finMonthly();
+  if(!data.some(m => m.buy + m.fix > 0)) return '<div class="fin-chart-empty">Ni vnosov v zadnjih šestih mesecih.</div>';
+  const max = Math.max(1, ...data.map(m => m.buy + m.fix));
+  const W=480, H=212, padL=10, padR=10, padT=16, padB=26;
+  const plotH = H-padT-padB, plotW = W-padL-padR, slot = plotW/data.length, bw = Math.min(44, slot*0.5);
+  const baseY = padT + plotH;
+  let svg = '';
+  data.forEach((m, i)=>{
+    const cx = padL + slot*i + slot/2;
+    const total = m.buy + m.fix;
+    const hBuy = m.buy/max*plotH, hFix = m.fix/max*plotH;
+    let y = baseY;
+    if(hBuy > 0){ y -= hBuy; svg += '<rect x="' + (cx-bw/2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hBuy.toFixed(1) + '" rx="2" fill="var(--pine)"></rect>'; }
+    if(hFix > 0){ y -= hFix; svg += '<rect x="' + (cx-bw/2).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hFix.toFixed(1) + '" rx="2" fill="var(--ember)"></rect>'; }
+    if(total > 0) svg += '<text x="' + cx.toFixed(1) + '" y="' + (y-5).toFixed(1) + '" text-anchor="middle" font-size="10" font-family="ui-monospace,monospace" fill="var(--ink-soft)">' + finShort(total) + '</text>';
+    svg += '<text x="' + cx.toFixed(1) + '" y="' + (H-8) + '" text-anchor="middle" font-size="11" fill="var(--ink-soft)">' + m.label + '</text>';
+  });
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Poraba po mesecih">' +
+    '<line x1="' + padL + '" y1="' + baseY + '" x2="' + (W-padR) + '" y2="' + baseY + '" stroke="var(--line)" stroke-width="1"></line>' +
+    svg + '</svg>' +
+    '<div class="fin-legend"><span><i style="background:var(--pine)"></i>Nakupi</span><span><i style="background:var(--ember)"></i>Popravila</span></div>';
+}
+function finDonut(key){
+  const spent = finSpentByCat(key);
+  const parts = [];
+  categories.forEach((c,i)=>{ const v = spent[c.id]||0; if(v>0) parts.push({ name:c.name, val:v, color:finCatColor(i) }); });
+  if(spent['_'] > 0) parts.push({ name:'Nerazvrščeno', val:spent['_'], color:'var(--ink-soft)' });
+  const tot = parts.reduce((s,p)=>s+p.val, 0);
+  if(tot <= 0) return '<div class="fin-chart-empty">Ta mesec ni zabeleženih stroškov.</div>';
+  const cx=80, cy=80, r=58, sw=22, C = 2*Math.PI*r;
+  let off = 0, rings = '', legend = '';
+  for(const p of parts){
+    const frac = p.val/tot;
+    rings += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + p.color +
+      '" stroke-width="' + sw + '" stroke-dasharray="' + (frac*C).toFixed(2) + ' ' + C.toFixed(2) +
+      '" stroke-dashoffset="' + (-off*C).toFixed(2) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"></circle>';
+    legend += '<span><i style="background:' + p.color + '"></i>' + esc(p.name) + ' · ' + fmtEur(p.val) + ' (' + Math.round(frac*100) + '%)</span>';
+    off += frac;
+  }
+  return '<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">' +
+    '<svg viewBox="0 0 160 160" width="150" height="150" role="img" aria-label="Poraba po kategorijah">' +
+      '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="var(--line-soft)" stroke-width="' + sw + '"></circle>' +
+      rings +
+      '<text x="' + cx + '" y="' + (cy-2) + '" text-anchor="middle" font-size="14" font-family="ui-monospace,monospace" font-weight="700" fill="var(--ink)">' + finShort(tot) + ' €</text>' +
+      '<text x="' + cx + '" y="' + (cy+15) + '" text-anchor="middle" font-size="9" letter-spacing="1.5" fill="var(--ink-soft)">MESEC</text>' +
+    '</svg>' +
+    '<div class="fin-legend" style="flex-direction:column;gap:9px;margin-top:0">' + legend + '</div></div>';
+}
+/* vrstice proračun vs porabljeno za izbrani mesec (osrednji element načrtovalnika) */
+function finBudgetRows(key){
+  const spent = finSpentByCat(key);
+  let h = '';
+  categories.forEach((c,i)=>{
+    const sp = spent[c.id]||0, bud = Number(finance.budgets[c.id])||0;
+    const pct = bud>0 ? Math.min(100, sp/bud*100) : (sp>0?100:0);
+    const over = bud>0 && sp>bud, near = bud>0 && !over && sp/bud>=0.8;
+    const col = over ? 'var(--alert)' : near ? 'var(--gold)' : finCatColor(i);
+    h += '<div class="bgt-row">' +
+      '<div class="bgt-name">' + esc(c.icon) + ' ' + esc(c.name) + '</div>' +
+      '<div class="bgt-bar"><i style="width:' + pct.toFixed(0) + '%;background:' + col + '"></i></div>' +
+      '<div class="bgt-fig' + (over?' over':'') + '"><b>' + fmtEur(sp) + '</b> <span>/ ' + (bud>0?fmtEur(bud):'ni proračuna') + '</span></div>' +
+    '</div>';
+  });
+  if(spent['_'] > 0){
+    h += '<div class="bgt-row">' +
+      '<div class="bgt-name" style="color:var(--ink-soft)">Nerazvrščeno</div>' +
+      '<div class="bgt-bar"><i style="width:100%;background:var(--ink-soft)"></i></div>' +
+      '<div class="bgt-fig"><b>' + fmtEur(spent['_']) + '</b> <span>/ —</span></div>' +
+    '</div>';
+  }
+  return h;
+}
+function finRowsByDate(list){
+  return (list||[]).slice().sort((a,b)=> String(b.date||'').localeCompare(String(a.date||'')));
+}
+function finPurchasesTable(key){
+  const rows = finRowsByDate(finance.purchases.filter(e=>inFinMonth(e,key)));
+  if(!rows.length) return '<div class="tablewrap"><div class="fin-empty">Ta mesec ni nakupov. Dodaj z gumbom zgoraj.</div></div>';
+  let h = '<div class="tablewrap"><table><thead><tr><th>Datum</th><th>Predmet</th><th>Kategorija</th><th>Kol.</th><th style="text-align:right">Znesek</th><th>Opomba</th><th></th></tr></thead><tbody>';
+  for(const e of rows){
+    h += '<tr>' +
+      '<td style="white-space:nowrap">' + fmtDate(e.date) + '</td>' +
+      '<td>' + esc(e.name||'') + (e.code?' <span class="tag">' + esc(e.code) + '</span>':'') + '</td>' +
+      '<td style="color:var(--ink-soft)">' + esc(finCatLabel(e.cat)) + '</td>' +
+      '<td>' + (e.qty || 1) + '</td>' +
+      '<td class="fin-amt">' + fmtEur(e.amount) + '</td>' +
+      '<td style="color:var(--ink-soft)">' + esc(e.note||'') + '</td>' +
+      '<td><div class="fin-actcell">' +
+        '<button class="btn btn-ghost btn-sm" data-act="finEdit" data-kind="purchase" data-id="' + esc(e.id) + '">Uredi</button>' +
+        '<button class="btn btn-danger btn-sm" data-act="finDel" data-kind="purchase" data-id="' + esc(e.id) + '">✕</button>' +
+      '</div></td></tr>';
+  }
+  return h + '</tbody></table></div>';
+}
+function finRepairsTable(key){
+  const rows = finRowsByDate(finance.repairs.filter(e=>inFinMonth(e,key)));
+  if(!rows.length) return '<div class="tablewrap"><div class="fin-empty">Ta mesec ni popravil.</div></div>';
+  let h = '<div class="tablewrap"><table><thead><tr><th>Datum</th><th>Predmet / opis</th><th>Kategorija</th><th style="text-align:right">Znesek</th><th>Opomba</th><th></th></tr></thead><tbody>';
+  for(const e of rows){
+    h += '<tr>' +
+      '<td style="white-space:nowrap">' + fmtDate(e.date) + '</td>' +
+      '<td>' + esc(e.name||'') + (e.code?' <span class="tag">' + esc(e.code) + '</span>':'') + '</td>' +
+      '<td style="color:var(--ink-soft)">' + esc(finCatLabel(e.cat)) + '</td>' +
+      '<td class="fin-amt">' + fmtEur(e.amount) + '</td>' +
+      '<td style="color:var(--ink-soft)">' + esc(e.note||'') + '</td>' +
+      '<td><div class="fin-actcell">' +
+        '<button class="btn btn-ghost btn-sm" data-act="finEdit" data-kind="repair" data-id="' + esc(e.id) + '">Uredi</button>' +
+        '<button class="btn btn-danger btn-sm" data-act="finDel" data-kind="repair" data-id="' + esc(e.id) + '">✕</button>' +
+      '</div></td></tr>';
+  }
+  return h + '</tbody></table></div>';
+}
+function finWishlistTable(){
+  const rows = (finance.wishlist||[]).slice().sort((a,b)=>{
+    const ra = (FIN_PRI[a.priority]||FIN_PRI.med).rank, rb = (FIN_PRI[b.priority]||FIN_PRI.med).rank;
+    return ra !== rb ? ra - rb : String(a.name||'').localeCompare(String(b.name||''), 'sl');
+  });
+  if(!rows.length) return '<div class="tablewrap"><div class="fin-empty">Nakupni seznam je prazen. Dodaj, kar bi še potrebovali.</div></div>';
+  let h = '<div class="tablewrap"><table><thead><tr><th>Prioriteta</th><th>Predmet</th><th>Kategorija</th><th>Kol.</th><th style="text-align:right">Ocenjeni znesek</th><th>Opomba</th><th></th></tr></thead><tbody>';
+  for(const e of rows){
+    const p = FIN_PRI[e.priority] || FIN_PRI.med;
+    h += '<tr>' +
+      '<td><span class="pri ' + p.cls + '">' + p.label + '</span></td>' +
+      '<td>' + esc(e.name||'') + '</td>' +
+      '<td style="color:var(--ink-soft)">' + esc(finCatLabel(e.cat)) + '</td>' +
+      '<td>' + (e.qty || 1) + '</td>' +
+      '<td class="fin-amt">' + fmtEur(e.amount) + '</td>' +
+      '<td style="color:var(--ink-soft)">' + esc(e.note||'') + '</td>' +
+      '<td><div class="fin-actcell">' +
+        '<button class="btn btn-accent btn-sm" data-act="finBought" data-id="' + esc(e.id) + '">✓ Kupljeno</button>' +
+        '<button class="btn btn-ghost btn-sm" data-act="finEdit" data-kind="wishlist" data-id="' + esc(e.id) + '">Uredi</button>' +
+        '<button class="btn btn-danger btn-sm" data-act="finDel" data-kind="wishlist" data-id="' + esc(e.id) + '">✕</button>' +
+      '</div></td></tr>';
+  }
+  return h + '</tbody></table></div>';
+}
+function renderFinance(m){
+  const key = finMonth;
+  const budget = finBudgetTotal();
+  const spent  = finMonthSpent(key);
+  const left   = budget - spent;
+  const plan   = finSum(finance.wishlist);
+  const isThis = key === finMonthKey();
+  m.innerHTML =
+    '<h2 class="view-title">Finančnik</h2>' +
+    '<div class="view-sub">Mesečni načrtovalnik stroškov opreme: proračun in poraba po kategorijah, nakupi, popravila in nakupni seznam. Vnose ureja gospodar opreme.</div>' +
+    '<div class="fin-monthnav">' +
+      '<button type="button" class="mbtn" data-act="finPrev" aria-label="Prejšnji mesec">‹</button>' +
+      '<span class="mlabel">' + finMonthLabel(key) + '</span>' +
+      '<button type="button" class="mbtn" data-act="finNext" aria-label="Naslednji mesec">›</button>' +
+      (isThis ? '' : '<button type="button" class="today" data-act="finToday">danes</button>') +
+    '</div>' +
+    '<div class="fin-sum">' +
+      '<div class="fin-tile t-plan"><span class="lbl">Mesečni proračun</span><b class="amt">' + fmtEur(budget) + '</b><div class="sub2">vse kategorije</div></div>' +
+      '<div class="fin-tile t-buy"><span class="lbl">Porabljeno ta mesec</span><b class="amt">' + fmtEur(spent) + '</b><div class="sub2">nakupi in popravila</div></div>' +
+      '<div class="fin-tile ' + (left<0?'t-fix':'t-total') + '"><span class="lbl">' + (left<0?'Preseženo':'Ostane') + '</span><b class="amt">' + fmtEur(Math.abs(left)) + '</b><div class="sub2">proračun − poraba</div></div>' +
+      '<div class="fin-tile t-plan"><span class="lbl">Načrtovano</span><b class="amt">' + fmtEur(plan) + '</b><div class="sub2">' + finance.wishlist.length + ' na seznamu</div></div>' +
+    '</div>' +
+    '<div class="fin-card" style="margin-bottom:8px"><div class="fin-sechd" style="margin-bottom:6px"><h3>Proračun po kategorijah</h3>' +
+      '<span class="tot">' + fmtEur(spent) + ' / ' + fmtEur(budget) + '</span>' +
+      '<button class="btn btn-ghost btn-sm" data-act="finBudgets">Uredi proračune</button></div>' +
+      finBudgetRows(key) + '</div>' +
+    '<div class="fin-charts">' +
+      '<div class="fin-card"><h3>Poraba po kategorijah</h3><div class="hd-sub">' + finMonthLabel(key) + '</div>' + finDonut(key) + '</div>' +
+      '<div class="fin-card"><h3>Trend po mesecih</h3><div class="hd-sub">Zadnjih 6 mesecev: nakupi in popravila.</div>' + finBarChart() + '</div>' +
+    '</div>' +
+    '<div class="fin-sec"><div class="fin-sechd"><h3>Nakupi opreme</h3><span class="tot">' + finMonthLabel(key) + '</span>' +
+      '<button class="btn btn-primary btn-sm" data-act="finAdd" data-kind="purchase">+ Dodaj nakup</button></div>' + finPurchasesTable(key) + '</div>' +
+    '<div class="fin-sec"><div class="fin-sechd"><h3>Popravila opreme</h3><span class="tot">' + finMonthLabel(key) + '</span>' +
+      '<button class="btn btn-primary btn-sm" data-act="finAdd" data-kind="repair">+ Dodaj popravilo</button></div>' + finRepairsTable(key) + '</div>' +
+    '<div class="fin-sec"><div class="fin-sechd"><h3>Nakupni seznam</h3><span class="tot">ocena ' + fmtEur(plan) + '</span>' +
+      '<button class="btn btn-primary btn-sm" data-act="finAdd" data-kind="wishlist">+ Dodaj na seznam</button></div>' + finWishlistTable() + '</div>';
+}
+function finModalTitle(kind, edit){
+  const t = kind==='purchase' ? 'nakup' : kind==='repair' ? 'popravilo' : 'vnos na seznam';
+  return (edit ? 'Uredi ' : 'Dodaj ') + t;
+}
+function finItemOptions(sel){
+  let h = '<option value="">— samo kategorija / ročni vnos —</option>';
+  for(const c of categories){
+    const items = inventory.filter(i=>i.cat===c.id);
+    if(!items.length) continue;
+    h += '<optgroup label="' + esc(c.name) + '">';
+    for(const it of items) h += '<option value="' + esc(it.id) + '"' + (sel===it.id?' selected':'') + '>' + esc(it.name) + ' (' + esc(it.id) + ')</option>';
+    h += '</optgroup>';
+  }
+  return h;
+}
+function finCatOptions(sel){
+  return '<option value="">— brez kategorije —</option>' + categories.map(c=>
+    '<option value="' + esc(c.id) + '"' + (sel===c.id?' selected':'') + '>' + esc(c.icon) + ' ' + esc(c.name) + '</option>').join('');
+}
+/* ob izbiri predmeta iz inventarja prednastavi kategorijo in (če je prazno) naziv */
+function finItemPick(sel){
+  const it = itemByCode(sel.value);
+  if(!it) return;
+  const fc = el('fCat'); if(fc) fc.value = it.cat || '';
+  const fn = el('fName'); if(fn && !fn.value.trim()) fn.value = it.name;
+}
+function openFinanceModal(kind, id){
+  if(!isAdmin()) return;
+  const e = id ? finList(kind).find(x=>x.id===id) : null;
+  const defDate = (finMonth === finMonthKey()) ? todayISO() : (finMonth + '-01');
+  const dateField = (kind!=='wishlist')
+    ? '<div class="field"><label>Datum</label><input id="fDate" type="date" value="' + esc(e?e.date:defDate) + '"></div>' : '';
+  const nameLabel = kind==='repair' ? 'Naziv / opis popravila' : 'Naziv';
+  const amountLabel = kind==='wishlist' ? 'Ocenjeni znesek (€)' : 'Znesek (€)';
+  const qtyField = (kind!=='repair')
+    ? '<div class="field"><label>Količina</label><input id="fQty" type="number" min="1" value="' + (e?(e.qty||1):1) + '"></div>' : '';
+  const priField = (kind==='wishlist')
+    ? '<div class="field"><label>Prioriteta</label><select id="fPriority">' +
+        ['high','med','low'].map(p=>'<option value="' + p + '"' + ((e?e.priority:'med')===p?' selected':'') + '>' + FIN_PRI[p].label + '</option>').join('') +
+      '</select></div>' : '';
+  openModal(
+    '<h3>' + finModalTitle(kind, !!e) + '</h3>' +
+    dateField +
+    '<div class="field"><label>Predmet iz inventarja (neobvezno)</label><select id="fCode" data-change="finItemPick">' + finItemOptions(e?e.code:'') + '</select></div>' +
+    '<div class="fieldrow">' +
+      '<div class="field"><label>Kategorija</label><select id="fCat">' + finCatOptions(e?e.cat:'') + '</select></div>' +
+      qtyField +
+    '</div>' +
+    '<div class="field"><label>' + nameLabel + '</label><input id="fName" value="' + esc(e?e.name:'') + '" placeholder="' + (kind==='repair'?'npr. menjava droga':'npr. Spalna vreča') + '"></div>' +
+    '<div class="fieldrow">' +
+      '<div class="field"><label>' + amountLabel + '</label><input id="fAmount" inputmode="decimal" value="' + (e?String(e.amount).replace('.', ','):'') + '" placeholder="0,00"></div>' +
+      priField +
+    '</div>' +
+    '<div class="field"><label>Opomba (neobvezno)</label><input id="fNote" value="' + esc(e?e.note:'') + '"></div>' +
+    '<div class="actions">' +
+      (e?'<button class="btn btn-danger" style="margin-right:auto" data-act="finDel" data-kind="' + kind + '" data-id="' + esc(e.id) + '">Izbriši</button>':'') +
+      '<button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
+      '<button class="btn btn-primary" data-act="finSave" data-kind="' + kind + '"' + (e?' data-id="' + esc(e.id) + '"':'') + '>Shrani</button>' +
+    '</div>');
+  if(el('fName')) el('fName').focus();
+}
+function saveFinanceEntry(kind, id){
+  if(!isAdmin()) return;
+  const name = el('fName').value.trim();
+  if(!name){ toast('Vpiši naziv predmeta oziroma opis.'); return; }
+  const amount = parseAmount(el('fAmount').value);
+  if(isNaN(amount) || amount < 0){ toast('Vpiši veljaven znesek (npr. 24,90).'); return; }
+  const entry = { name, amount, note: el('fNote').value.trim(),
+    cat: el('fCat') ? (el('fCat').value || '') : '',
+    code: (el('fCode') && el('fCode').value) ? el('fCode').value : '' };
+  if(kind !== 'wishlist'){ entry.date = el('fDate').value || todayISO(); }
+  if(kind !== 'repair'){ const q = parseInt(el('fQty').value, 10); entry.qty = (q && q>0) ? q : 1; }
+  if(kind === 'wishlist'){ entry.priority = el('fPriority').value || 'med'; }
+  const list = finList(kind);
+  if(id){
+    const cur = list.find(x=>x.id===id);
+    if(!cur){ toast('Vnosa ni mogoče najti.'); return; }
+    Object.assign(cur, entry);
+  } else {
+    entry.id = finUid();
+    list.unshift(entry);
+  }
+  saveData();
+  closeModal();
+  toast('Vnos shranjen.');
+  if(activeNav==='finance') renderFinance(el('main'));
+}
+function openBudgetModal(){
+  if(!isAdmin()) return;
+  const rows = categories.map(c=>{
+    const v = finance.budgets[c.id];
+    const val = (v!=null && v!=='') ? String(v).replace('.', ',') : '';
+    return '<div class="field"><label>' + esc(c.icon) + ' ' + esc(c.name) + ' — mesečni proračun (€)</label>' +
+      '<input id="bud_' + esc(c.id) + '" inputmode="decimal" value="' + esc(val) + '" placeholder="0,00"></div>';
+  }).join('');
+  openModal('<h3>Mesečni proračun po kategorijah</h3>' +
+    '<div class="hint">Znesek velja za vsak mesec. Pusti prazno, če kategorija nima proračuna.</div>' +
+    rows +
+    '<div class="actions"><button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
+      '<button class="btn btn-primary" data-act="finBudgetsSave">Shrani</button></div>');
+}
+function saveBudgets(){
+  if(!isAdmin()) return;
+  const b = {};
+  for(const c of categories){
+    const inp = el('bud_' + c.id);
+    if(!inp) continue;
+    const raw = inp.value.trim();
+    if(raw === '') continue;
+    const v = parseAmount(raw);
+    if(isNaN(v) || v < 0){ toast('Neveljaven znesek pri ' + c.name + '.'); return; }
+    b[c.id] = v;
+  }
+  finance.budgets = b;
+  saveData();
+  closeModal();
+  toast('Proračuni shranjeni.');
+  if(activeNav==='finance') renderFinance(el('main'));
+}
+function deleteFinanceEntry(kind, id){
+  if(!isAdmin()) return;
+  const list = finList(kind);
+  const e = list.find(x=>x.id===id);
+  if(!e) return;
+  confirmDialog('Vnos »' + (e.name||'') + '« (' + fmtEur(e.amount) + ') bo izbrisan.', ()=>{
+    const i = list.findIndex(x=>x.id===id);
+    if(i>=0) list.splice(i,1);
+    saveData();
+    closeModal();
+    toast('Vnos izbrisan.');
+    if(activeNav==='finance') renderFinance(el('main'));
+  });
+}
+/* premakne vnos z nakupnega seznama med opravljene nakupe (z današnjim datumom) */
+function wishlistToPurchase(id){
+  if(!isAdmin()) return;
+  const i = finance.wishlist.findIndex(x=>x.id===id);
+  if(i<0) return;
+  const w = finance.wishlist[i];
+  finance.purchases.unshift({ id:finUid(), date:todayISO(), cat:w.cat||'', code:w.code||'', name:w.name, qty:w.qty||1, amount:Number(w.amount)||0,
+    note: w.note ? w.note + ' (z nakupnega seznama)' : 'z nakupnega seznama' });
+  finance.wishlist.splice(i,1);
+  saveData();
+  toast('Označeno kot kupljeno: ' + w.name);
+  if(activeNav==='finance') renderFinance(el('main'));
 }
 
 /* =====================================================================
@@ -3241,6 +3696,17 @@ const ACTIONS = {
   calDay:     b=>selectCalDay(b.dataset.iso),
   calDayClose:()=>selectCalDay(null),
   calItem:    b=>{ closeCalPop(); showItemDetail(b.dataset.id); },
+  /* finančnik */
+  finPrev:    ()=>finShiftMonth(-1),
+  finNext:    ()=>finShiftMonth(1),
+  finToday:   ()=>finToday(),
+  finBudgets: ()=>openBudgetModal(),
+  finBudgetsSave: ()=>saveBudgets(),
+  finAdd:     b=>openFinanceModal(b.dataset.kind, null),
+  finEdit:    b=>openFinanceModal(b.dataset.kind, b.dataset.id),
+  finSave:    b=>saveFinanceEntry(b.dataset.kind, b.dataset.id || null),
+  finDel:     b=>deleteFinanceEntry(b.dataset.kind, b.dataset.id),
+  finBought:  b=>wishlistToPurchase(b.dataset.id),
   /* Excel, kopija, dnevnik */
   excel:      ()=>exportExcel(),
   backupExport: ()=>exportJSON(),
@@ -3329,7 +3795,8 @@ const CHANGES = {
   logType:    t=>{ logFilter.type = t.value; updateLogTable(); },
   userRole:   t=>changeUserRole(t.dataset.id, t.value),
   importFile: t=>handleImportFile(t),
-  itemFilePick: t=>onItemFilePick(t)
+  itemFilePick: t=>onItemFilePick(t),
+  finItemPick: t=>finItemPick(t)
 };
 document.addEventListener('change', e=>{
   const t = e.target.closest('[data-change]');
