@@ -579,7 +579,6 @@ tr.rowlink:hover td{background:#F1EDDD}
       <div class="login-err" id="loginErr2"></div>
       <button class="btn btn-primary btn-block" data-act="register">Ustvari račun</button>
       <div class="login-hint">
-        Nov račun dobi vlogo tabornik. Pravice gospodarja opreme ti lahko dodeli obstoječi gospodar opreme.<br>
         Že imaš račun? <a data-act="showLogin" style="color:var(--ember);font-weight:600;cursor:pointer">Nazaj na prijavo</a>
       </div>
     </div>
@@ -845,7 +844,7 @@ let users      = [];
 let currentUser = null;
 let activeNav   = 'all';
 let browseState = { cat:null, subcat:null, q:'' };      // pogled posamezne kategorije
-let allFilter   = { cat:null, status:null, q:'' };      // pogled Vsa oprema
+let allFilter   = { cat:null, sub:null, status:null, q:'' };  // pogled Vsa oprema
 let logFilter   = { type:'', q:'' };                    // dnevnik
 let tableSort   = { key:null, dir:1 };                  // razvrščanje tabel
 let calY = null, calM = null, calSelDay = null;         // koledar
@@ -1276,8 +1275,8 @@ function closeSidebarMobile(){ toggleSidebar(false); }
 function buildSidebar(){
   let h = '<div class="snav">';
   h += '<div class="snav-label">Delo</div>';
-  h += navBtn('cart','🛒','Izposoja', cart.length || null);
   h += navBtn('browse','📦','Pregled opreme');
+  h += navBtn('cart','🛒','Izposoja', cart.length || null);
   h += navBtn('all','🗂️','Vsa oprema');
   if(isAdmin()){
     h += '<div class="snav-label">Gospodar</div>';
@@ -1386,6 +1385,12 @@ function itemCardHTML(item, ctx){
       h += '<div class="sub" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">' +
         '<b>Podatki kategorije</b>' + lines.join('') + '</div>';
     }
+  }
+  const files = item.files || [];
+  if(files.length){
+    h += '<div class="sub" style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px"><b>Dokumenti</b>' +
+      files.map(f=>'<br><a href="' + esc(fileUrl(f.path)) + '" target="_blank" rel="noopener" style="color:var(--ember);font-weight:600">📄 ' + esc(f.name) + '</a>').join('') +
+      '</div>';
   }
   h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">';
   if(av > 0) h += '<button class="btn btn-accent" data-act="borrow" data-id="' + esc(item.id) + '">↗ Izposodi</button>';
@@ -1582,6 +1587,7 @@ function showItemDetail(id){
 function applyAllFilter(){
   return inventory.filter(i=>{
     if(allFilter.cat && i.cat !== allFilter.cat) return false;
+    if(allFilter.sub && i.subcat !== allFilter.sub) return false;
     if(allFilter.status){
       const b = borrowedQty(i);
       if(allFilter.status==='ok'      && b !== 0) return false;
@@ -1610,7 +1616,7 @@ function renderAll(m){
   const total = items.reduce((s,i)=>s+i.qty,0);
   const out = items.reduce((s,i)=>s+borrowedQty(i),0);
   const lateCnt = items.filter(itemHasOverdue).length;
-  const filtered = !!(allFilter.cat || allFilter.status || allFilter.q);
+  const filtered = !!(allFilter.cat || allFilter.sub || allFilter.status || allFilter.q);
 
   let catChips = '<div class="chips"><span class="chips-label">Kategorija</span>' +
     '<button class="chip chip-sm' + (!allFilter.cat?' active':'') + '" data-act="allCat">Vse' +
@@ -1622,6 +1628,23 @@ function renderAll(m){
       esc(c.icon) + ' ' + esc(c.name) + '<span class="cnt">' + cnt + '</span></button>';
   }
   catChips += '</div>';
+
+  let subChips = '';
+  if(allFilter.cat){
+    const c = catById(allFilter.cat);
+    const subs = (c && Array.isArray(c.subcats)) ? c.subcats : [];
+    const withItems = subs.filter(s => inventory.some(i => i.cat===allFilter.cat && i.subcat===s));
+    if(withItems.length){
+      subChips = '<div class="chips" style="margin-top:-4px"><span class="chips-label">Podkategorija</span>' +
+        '<button class="chip chip-sm' + (!allFilter.sub?' active':'') + '" data-act="allSub">Vse</button>';
+      for(const s of withItems){
+        const cnt = inventory.filter(i => i.cat===allFilter.cat && i.subcat===s).length;
+        subChips += '<button class="chip chip-sm' + (allFilter.sub===s?' active':'') + '" data-act="allSub" data-sub="' + esc(s) + '">' +
+          esc(s) + '<span class="cnt">' + cnt + '</span></button>';
+      }
+      subChips += '</div>';
+    }
+  }
 
   let stChips = '<div class="chips" style="margin-top:-4px"><span class="chips-label">Status</span>' +
     '<button class="chip chip-sm' + (!allFilter.status?' active':'') + '" data-act="allStatus">Vsi</button>';
@@ -1635,7 +1658,7 @@ function renderAll(m){
     '<h2 class="view-title">Vsa oprema</h2>' +
     '<div class="view-sub">Celoten inventar — filtriraj po kategoriji, statusu ali z iskanjem; stolpce razvrstiš s klikom na njihov naslov.</div>' +
     overdueBannerHTML() +
-    catChips + stChips +
+    catChips + subChips + stChips +
     '<div class="stats">' +
       '<div class="stat"><b>' + items.length + '</b><span>Predmetov</span></div>' +
       '<div class="stat"><b>' + total + '</b><span>Vseh kosov</span></div>' +
@@ -1840,6 +1863,61 @@ function returnGroup(gid){
   toast('Vrnjeno: ' + n + ' predmetov (' + esc(sib[0].loan.borrower) + ')');
   refreshCurrent();
 }
+/* vračilo skupinske izposoje, kjer izbereš katere predmete vrneš (celotno ali
+   posamezno); seznam našteje vse predmete skupine, ki so še izposojeni */
+function openGroupReturnModal(gid){
+  const sib = loansByGid(gid);
+  if(!sib.length){ toast('Ta skupina nima odprtih izposoj.'); return; }
+  if(!isAdmin() && !sib.some(s=>canReturn(s.loan))){
+    toast('To skupino lahko vrne le izposojevalec ali gospodar opreme.'); return;
+  }
+  const who = sib[0].loan.borrower;
+  const nItems = new Set(sib.map(s=>s.item.id)).size;
+  const totalQty = sib.reduce((s,x)=>s+x.loan.qty, 0);
+  let h = '<h3>Vračilo skupinske izposoje</h3>' +
+    '<div class="hint"><b>' + esc(who) + '</b> — ' + nItems + ' predmetov, ' + totalQty + ' kosov. ' +
+      'Vrni celotno skupino naenkrat ali izberi posamezne predmete.</div>';
+  sib.forEach(({ item, loan }, i)=>{
+    const mine = canReturn(loan);
+    h += '<div class="loanrow' + (isOverdue(loan)?' late':'') + '" style="margin-bottom:8px">' +
+      '<span class="who">' + esc(item.name) + ' <span class="tag">' + esc(item.id) + '</span></span>' +
+      '<span>' + loan.qty + ' kos' + (loan.qty===1?'':'ov') + '</span>' +
+      '<span class="' + (isOverdue(loan)?'overdue':'') + '">do ' + fmtDate(loan.until) + (isOverdue(loan)?' ⚠ ZAMUDA':'') + '</span>' +
+      (mine
+        ? '<span class="loanctl">Vrne:' +
+            '<input id="grq' + i + '" type="number" min="1" max="' + loan.qty + '" value="' + loan.qty + '">' +
+            '<button class="btn btn-primary btn-sm" data-act="returnGroupItem" data-gid="' + esc(gid) + '" data-i="' + i + '">↩ Vrni</button>' +
+          '</span>'
+        : '<span style="color:var(--ink-soft);font-size:12.5px">vrne lahko le izposojevalec ali gospodar opreme</span>') +
+      '</div>';
+  });
+  h += '<div class="loanrow" style="margin-bottom:8px;border-color:var(--ember);background:#FBF1E8">' +
+    '<button class="btn btn-accent btn-sm" data-act="returnGroup" data-gid="' + esc(gid) + '">↩ Vrni celotno skupino</button>' +
+  '</div>';
+  h += '<div class="actions"><button class="btn btn-ghost" data-act="modalClose">Zapri</button></div>';
+  openModal(h);
+}
+/* vrne en izbran predmet iz skupinske izposoje (celoto ali del); indeks i kaže
+   na par v loansByGid(gid), enako kot v openGroupReturnModal */
+function returnGroupItem(gid, i){
+  const sib = loansByGid(gid);
+  const pair = sib[i];
+  if(!pair){ toast('Te izposoje ni mogoče najti.'); return; }
+  const { item, loan } = pair;
+  if(!canReturn(loan)){ toast('To opremo lahko vrne le izposojevalec ali gospodar opreme.'); return; }
+  const inp = el('grq'+i);
+  const q = parseInt(inp ? inp.value : '', 10);
+  if(!q || q<1 || q>loan.qty){ toast('Količina mora biti med 1 in ' + loan.qty + '.'); return; }
+  const idx = item.loans.indexOf(loan);
+  loan.qty -= q;
+  const who = loan.borrower;
+  if(loan.qty===0) item.loans.splice(idx, 1);
+  log.unshift({ type:'return', code:item.id, name:item.name, borrower:who, email:loan.email, borrowerId:loan.borrowerId, qty:q, time:new Date().toLocaleString('sl-SI') });
+  saveData();
+  closeModal();
+  toast('Vrnjeno: ' + q + ' × ' + item.name + ' (' + who + ')');
+  refreshCurrent(item.id);
+}
 
 /* ---------- SKUPINSKA IZPOSOJA (košarica) ----------
    Uporabnik doda več predmetov, vpiše osebo in rok enkrat. Ob oddaji
@@ -2035,6 +2113,78 @@ function submitCartLoan(){
 /* =====================================================================
    10. PREDMETI — dodajanje, urejanje, brisanje (admin)
 ===================================================================== */
+/* ---------- PDF dokumenti predmeta (Supabase Storage) ----------
+   PDF se nalozijo v javni bucket; v predmetu hranimo le { name, path }.
+   Pot je nakljucna (UUID), zato javne povezave ni mogoce uganiti.
+   Brisanje iz shrambe se izvede sele ob shranjevanju predmeta, da
+   preklic urejanja ne pusti predmeta s pokvarjeno povezavo. */
+const FILES_BUCKET = 'item-files';
+const FILE_MAX = 20 * 1024 * 1024;       // 20 MB na datoteko
+let editFiles = [];                      // dokumenti v odprtem urejevalniku
+let editFilesOrig = [];                  // poti dokumentov ob odprtju (za brisanje ob shranjevanju)
+let editFilesBusy = false;
+function fileUid(){
+  return (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+       : 'f' + Date.now() + Math.random().toString(36).slice(2);
+}
+function fileUrl(path){
+  if(!sb) return '#';
+  const { data } = sb.storage.from(FILES_BUCKET).getPublicUrl(path);
+  return (data && data.publicUrl) ? data.publicUrl : '#';
+}
+async function uploadItemFile(file){
+  const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(-80) || 'dokument.pdf';
+  const path = fileUid() + '/' + safe;
+  const { error } = await sb.storage.from(FILES_BUCKET)
+    .upload(path, file, { contentType: file.type || 'application/pdf', upsert:false });
+  if(error) throw error;
+  return { name: file.name, path };
+}
+function filesSectionHTML(){
+  return '<div class="field"><label>Dokumenti (PDF)</label>' +
+    '<div id="iFilesList"></div>' +
+    '<input type="file" id="iFileInput" accept="application/pdf,.pdf" multiple style="display:none" data-change="itemFilePick">' +
+    '<button type="button" class="btn btn-ghost btn-sm" id="iFileAddBtn" data-act="itemFileAdd">+ Dodaj PDF</button>' +
+    '</div>';
+}
+function renderEditFilesList(){
+  const host = el('iFilesList');
+  if(!host) return;
+  host.innerHTML = editFiles.length
+    ? editFiles.map((f,i)=>
+        '<div style="display:flex;align-items:center;gap:8px;margin:4px 0">' +
+          '<a href="' + esc(fileUrl(f.path)) + '" target="_blank" rel="noopener" style="flex:1;color:var(--ember);font-weight:600">📄 ' + esc(f.name) + '</a>' +
+          '<button type="button" class="btn btn-danger btn-sm" data-act="itemFileRemove" data-idx="' + i + '"' + (editFilesBusy?' disabled':'') + '>✕</button>' +
+        '</div>').join('')
+    : '<div class="sub" style="margin:0 0 6px">Ni priloženih dokumentov.</div>';
+  const btn = el('iFileAddBtn');
+  if(btn){ btn.disabled = editFilesBusy; btn.textContent = editFilesBusy ? 'Nalagam …' : '+ Dodaj PDF'; }
+}
+async function onItemFilePick(input){
+  const files = Array.from(input.files || []);
+  input.value = '';                        // omogoci ponovno izbiro iste datoteke
+  if(!files.length) return;
+  if(!sb){ toast('Supabase ni na voljo.'); return; }
+  editFilesBusy = true; renderEditFilesList();
+  for(const file of files){
+    if(file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)){ toast('Dovoljeni so samo PDF dokumenti: ' + file.name); continue; }
+    if(file.size > FILE_MAX){ toast('Datoteka je prevelika (najvec 20 MB): ' + file.name); continue; }
+    try{ editFiles.push(await uploadItemFile(file)); }
+    catch(e){ console.error(e); toast('Nalaganje ni uspelo: ' + file.name + (e && e.message ? ' (' + e.message + ')' : '')); }
+  }
+  editFilesBusy = false; renderEditFilesList();
+}
+function removeEditFile(idx){
+  if(editFilesBusy) return;               // referenco le odstranimo; iz shrambe brisemo sele ob shranjevanju
+  if(editFiles[idx]) editFiles.splice(idx, 1);
+  renderEditFilesList();
+}
+/* iz shrambe odstrani dokumente, ki so bili ob odprtju, zdaj pa jih ni vec */
+function purgeRemovedFiles(){
+  const keep = new Set(editFiles.map(f=>f.path));
+  const gone = editFilesOrig.filter(p => !keep.has(p));
+  if(gone.length && sb) sb.storage.from(FILES_BUCKET).remove(gone).catch(e=>console.error(e));
+}
 function openItemModal(id, presetCat, presetSub){
   if(!isAdmin()) return;
   const item = id ? itemByCode(id) : null;
@@ -2058,12 +2208,17 @@ function openItemModal(id, presetCat, presetSub){
       '</select></div>' +
     '</div>' +
     '<div class="field"><label>Opomba</label><input id="iNote" value="' + esc(item?item.note:'') + '"></div>' +
+    filesSectionHTML() +
     '<div class="actions">' +
       (item?'<button class="btn btn-danger" style="margin-right:auto" data-act="itemDel" data-id="' + esc(item.id) + '">Izbriši</button>':'') +
       '<button class="btn btn-ghost" data-act="modalClose">Prekliči</button>' +
       '<button class="btn btn-primary" data-act="itemSave"' + (item?' data-id="' + esc(item.id) + '"':'') + '>Shrani</button>' +
     '</div>');
+  editFiles = item && Array.isArray(item.files) ? item.files.map(f=>({ name:f.name, path:f.path })) : [];
+  editFilesOrig = editFiles.map(f=>f.path);
+  editFilesBusy = false;
   fillSubcats(item ? item.subcat : presetSub);
+  renderEditFilesList();
 }
 function fillSubcats(selected){
   const catSel = el('iCat');
@@ -2087,14 +2242,16 @@ function saveItem(id){
   }
   if(!name){ toast('Vpiši ime predmeta.'); return; }
   if(!qty || qty<1){ toast('Količina mora biti vsaj 1.'); return; }
+  const files = editFiles.slice();
   if(id){
     const item = itemByCode(id);
     if(qty < borrowedQty(item)){ toast('Količina ne more biti manjša od trenutno izposojene (' + borrowedQty(item) + ').'); return; }
-    Object.assign(item, { name, qty, cat, subcat:sub, condition:cond, note });
+    Object.assign(item, { name, qty, cat, subcat:sub, condition:cond, note, files });
   } else {
     if(itemByCode(code)){ toast('Koda ' + code + ' že obstaja.'); return; }
-    inventory.push({ id:code, name, cat, subcat:sub, qty, condition:cond, note, loans:[], custom:{} });
+    inventory.push({ id:code, name, cat, subcat:sub, qty, condition:cond, note, files, loans:[], custom:{} });
   }
+  purgeRemovedFiles();
   saveData();
   closeModal();
   toast('Predmet shranjen.');
@@ -2105,6 +2262,8 @@ function deleteItem(id){
   if(!item) return;
   if(borrowedQty(item)>0){ toast('Predmeta z odprtimi izposojami ni mogoče izbrisati.'); return; }
   confirmDialog('Predmet »' + item.name + '« (' + item.id + ') bo trajno izbrisan iz inventarja.', ()=>{
+    const paths = (item.files||[]).map(f=>f.path);
+    if(paths.length && sb) sb.storage.from(FILES_BUCKET).remove(paths).catch(e=>console.error(e));
     inventory = inventory.filter(i=>i.id!==item.id);
     saveData();
     closeModal();
@@ -2296,7 +2455,7 @@ function logTableHTML(rows){
       const key = e.type + '|' + e.gid;
       if(byGid[key] === undefined){
         byGid[key] = units.length;
-        units.push({ group:true, type:e.type, time:e.time, borrower:e.borrower, email:e.email, until:e.until,
+        units.push({ group:true, type:e.type, gid:e.gid, time:e.time, borrower:e.borrower, email:e.email, until:e.until,
           items:[{ name:e.name, code:e.code, qty:e.qty }] });
       } else {
         units[byGid[key]].items.push({ name:e.name, code:e.code, qty:e.qty });
@@ -2315,9 +2474,12 @@ function logTableHTML(rows){
       const codes = u.items.map(it=>'<span class="tag">' + esc(it.code) + '</span>').join('<br>');
       const qtys  = u.items.map(it=>it.qty).join('<br>');
       const isB = u.type==='borrow';
-      /* pri skupinski izposoji odpremo vračilo prvega predmeta, ki je še izposojen */
-      let retCode = '';
-      if(isB){ const f = u.items.find(it=>{ const x=itemByCode(it.code); return x && borrowedQty(x)>0; }); if(f) retCode = f.code; }
+      /* pri skupinski izposoji odpremo vračilo skupine, kjer izbereš predmet(e) */
+      let canRet = false;
+      if(isB){
+        canRet = u.items.some(it=>{ const x=itemByCode(it.code);
+          return x && borrowedQty(x)>0 && (isAdmin() || (x.loans||[]).some(canReturn)); });
+      }
       h += '<tr class="log-grouprow">' +
         '<td style="white-space:nowrap;font-size:13px;vertical-align:top">' + esc(u.time) + '</td>' +
         '<td style="vertical-align:top">' +
@@ -2330,7 +2492,9 @@ function logTableHTML(rows){
           '<br><small style="color:var(--ink-soft)">' + u.items.length + ' predmetov · ' + total + ' kosov</small></td>' +
         '<td class="qtycell" style="vertical-align:top;line-height:1.9">' + qtys + '</td>' +
         '<td style="vertical-align:top">' + (isB ? fmtDate(u.until) : '—') + '</td>' +
-        (isB ? logReturnCell(retCode, true) : '<td style="vertical-align:top"></td>') +
+        (isB && canRet
+          ? '<td style="vertical-align:top"><button class="btn btn-primary btn-sm" data-act="returnGroupPick" data-gid="' + esc(u.gid) + '">↩ Vrni</button></td>'
+          : '<td style="vertical-align:top"></td>') +
       '</tr>';
     } else {
       const e = u.group ? { type:u.type, time:u.time, name:u.items[0].name, code:u.items[0].code,
@@ -3032,15 +3196,18 @@ const ACTIONS = {
   sort:       b=>{ const k=b.dataset.key;
                    tableSort = (tableSort.key===k) ? {key:k, dir:-tableSort.dir} : {key:k, dir:1};
                    if(activeNav==='all') updateAllTable(); else updateBrowseTable(); },
-  allCat:     b=>{ allFilter.cat = b.dataset.id || null; renderAll(el('main')); },
+  allCat:     b=>{ allFilter.cat = b.dataset.id || null; allFilter.sub = null; renderAll(el('main')); },
+  allSub:     b=>{ allFilter.sub = b.dataset.sub || null; renderAll(el('main')); },
   allStatus:  b=>{ allFilter.status = b.dataset.id || null; renderAll(el('main')); },
-  allClear:   ()=>{ allFilter = { cat:null, status:null, q:'' }; renderAll(el('main')); },
+  allClear:   ()=>{ allFilter = { cat:null, sub:null, status:null, q:'' }; renderAll(el('main')); },
   showOverdue:()=>{ allFilter = { cat:null, status:'overdue', q:'' }; switchView('all'); },
   /* predmeti */
   itemNew:    b=>openItemModal(null, b.dataset.cat, b.dataset.sub),
   itemEdit:   b=>openItemModal(b.dataset.id),
   itemSave:   b=>saveItem(b.dataset.id || null),
   itemDel:    b=>deleteItem(b.dataset.id),
+  itemFileAdd:   ()=>{ const f = el('iFileInput'); if(f) f.click(); },
+  itemFileRemove: b=>removeEditFile(parseInt(b.dataset.idx,10)),
   /* izposoja in vračilo */
   borrow:     b=>openBorrowModal(b.dataset.id),
   borrowSave: b=>submitBorrow(b.dataset.id),
@@ -3052,6 +3219,8 @@ const ACTIONS = {
   return:     b=>openReturnModal(b.dataset.id),
   returnSave: b=>submitReturn(b.dataset.id, parseInt(b.dataset.idx,10)),
   returnGroup:b=>returnGroup(b.dataset.gid),
+  returnGroupPick: b=>openGroupReturnModal(b.dataset.gid),
+  returnGroupItem: b=>returnGroupItem(b.dataset.gid, parseInt(b.dataset.i,10)),
   returnAllUser: b=>returnAllForUser(b.dataset.bid, b.dataset.bemail),
   /* skupinska izposoja (košarica) */
   cartAdd:    b=>cartAdd(b.dataset.code),
@@ -3159,7 +3328,8 @@ const CHANGES = {
   calYear:    t=>{ calY = parseInt(t.value,10); calSelDay = null; renderCalPop(); },
   logType:    t=>{ logFilter.type = t.value; updateLogTable(); },
   userRole:   t=>changeUserRole(t.dataset.id, t.value),
-  importFile: t=>handleImportFile(t)
+  importFile: t=>handleImportFile(t),
+  itemFilePick: t=>onItemFilePick(t)
 };
 document.addEventListener('change', e=>{
   const t = e.target.closest('[data-change]');
